@@ -8,8 +8,9 @@
 
 ## 개인정보 처리방침
 - 페이지 파일: `docs/privacy-policy/index.html`
-- GitHub Pages 공개 URL(예상): `https://forevernewvie.github.io/minicut-timer/privacy-policy/`
-  - 저장소 Settings → Pages에서 배포 브랜치/폴더를 활성화하면 공개됩니다.
+- GitHub Pages 공개 URL: `https://forevernewvie.github.io/minicut-timer/privacy-policy/`
+- 배포 방식: `main` 브랜치 반영 시 GitHub Actions(`Privacy Policy Pages`)로 자동 배포
+- 최초 1회 저장소 Settings → Pages에서 Source를 **GitHub Actions**로 설정해야 합니다.
 
 ## 주요 기능
 - 2~6주 미니컷 계획 생성
