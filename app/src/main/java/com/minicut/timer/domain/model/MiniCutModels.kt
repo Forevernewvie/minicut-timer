@@ -8,8 +8,23 @@ data class MiniCutPlan(
     val durationWeeks: Int,
     val endDate: LocalDate,
     val dailyTargetKcal: Int,
+    val goalMode: MiniCutGoalMode = MiniCutGoalMode.MassReset,
     val isActive: Boolean = true,
 )
+
+enum class MiniCutGoalMode(
+    val displayName: String,
+    val shortDescription: String,
+) {
+    MassReset(
+        displayName = "매스업 리셋",
+        shortDescription = "다음 벌크업 효율 회복",
+    ),
+    EventReady(
+        displayName = "단기 외형 개선",
+        shortDescription = "촬영·휴가 등 이벤트 대비",
+    ),
+}
 
 data class CalorieEntry(
     val id: Long = 0L,
@@ -68,4 +83,55 @@ data class TargetGuidance(
     val body: String,
     val footnote: String,
     val tone: TargetGuidanceTone,
+)
+
+data class ReverseDietStep(
+    val weekLabel: String,
+    val targetCalories: Int,
+    val note: String,
+)
+
+data class ReverseDietPlan(
+    val title: String,
+    val summary: String,
+    val caution: String,
+    val steps: List<ReverseDietStep>,
+)
+
+data class DailyConditionCheck(
+    val date: LocalDate,
+    val bodyWeightKg: Float? = null,
+    val proteinGrams: Int? = null,
+    val resistanceSets: Int? = null,
+    val updatedAt: LocalDateTime,
+)
+
+enum class WeeklyWeightTrendStatus {
+    NoData,
+    TooSlow,
+    InRange,
+    TooFast,
+    GainOrStall,
+}
+
+data class WeeklyWeightTrend(
+    val status: WeeklyWeightTrendStatus = WeeklyWeightTrendStatus.NoData,
+    val ratePercentPerWeek: Float? = null,
+    val message: String = "체중 기록이 2회 이상 쌓이면 주간 감량 속도를 계산할 수 있어요.",
+)
+
+enum class CalorieAdjustmentDirection {
+    Keep,
+    Increase,
+    Decrease,
+}
+
+data class CalorieAdjustmentRecommendation(
+    val currentTargetKcal: Int,
+    val suggestedTargetKcal: Int,
+    val direction: CalorieAdjustmentDirection,
+    val deltaKcal: Int,
+    val title: String,
+    val message: String,
+    val actionable: Boolean,
 )

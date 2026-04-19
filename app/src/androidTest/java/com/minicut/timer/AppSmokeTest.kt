@@ -2,7 +2,7 @@ package com.minicut.timer
 
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.test.assertIsDisplayed
 import org.junit.Rule
 import org.junit.Test
 
@@ -12,6 +12,6 @@ class AppSmokeTest {
 
     @Test
     fun launchShowsCoreBranding() {
-        composeTestRule.onNodeWithText("미니컷 타이머").assertExists()
+        composeTestRule.onNodeWithText("미니컷 타이머").assertIsDisplayed()
     }
 }

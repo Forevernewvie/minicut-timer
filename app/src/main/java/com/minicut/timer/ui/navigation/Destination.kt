@@ -14,4 +14,15 @@ enum class Destination(
     Home("home", "홈", Icons.Outlined.Home),
     Calendar("calendar", "달력", Icons.Outlined.CalendarMonth),
     Plan("plan", "플랜", Icons.Outlined.EditCalendar),
+
+    ;
+
+    companion object {
+        const val PLAN_SUGGESTED_TARGET_ARG = "suggestedTarget"
+        const val PLAN_SUGGESTED_TARGET_NONE = -1
+        val PLAN_ROUTE_PATTERN = "${Plan.route}?$PLAN_SUGGESTED_TARGET_ARG={$PLAN_SUGGESTED_TARGET_ARG}"
+
+        fun planRouteWithSuggestedTarget(suggestedTargetKcal: Int): String =
+            "${Plan.route}?$PLAN_SUGGESTED_TARGET_ARG=$suggestedTargetKcal"
+    }
 }

@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.TargetGuidance
 import com.minicut.timer.domain.model.TargetGuidanceTone
 import com.minicut.timer.domain.rules.MiniCutRules
@@ -75,6 +76,10 @@ fun PlanScreen(
     var startDate by rememberSaveable { mutableStateOf(LocalDate.now()) }
     var durationWeeks by rememberSaveable { mutableIntStateOf(4) }
     var dailyTargetKcal by rememberSaveable { mutableIntStateOf(MiniCutRules.DEFAULT_TARGET_KCAL) }
+    var goalMode by rememberSaveable { mutableStateOf(MiniCutGoalMode.MassReset) }
+    var acknowledgeNotStrengthPeak by rememberSaveable { mutableStateOf(false) }
+    var acknowledgeNotLongTermDiet by rememberSaveable { mutableStateOf(false) }
+    var acknowledgeNotMassGainAvoidance by rememberSaveable { mutableStateOf(false) }
     var showDataResetDialog by rememberSaveable { mutableStateOf(false) }
     var inlineFeedbackMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var inlineFeedbackTone by rememberSaveable { mutableStateOf(MiniCutInlineFeedbackTone.Info) }
@@ -84,10 +89,18 @@ fun PlanScreen(
             startDate = it.startDate
             durationWeeks = it.durationWeeks
             dailyTargetKcal = it.dailyTargetKcal
+            goalMode = it.goalMode
+            acknowledgeNotStrengthPeak = true
+            acknowledgeNotLongTermDiet = true
+            acknowledgeNotMassGainAvoidance = true
         } ?: run {
             startDate = LocalDate.now()
             durationWeeks = 4
             dailyTargetKcal = MiniCutRules.DEFAULT_TARGET_KCAL
+            goalMode = MiniCutGoalMode.MassReset
+            acknowledgeNotStrengthPeak = false
+            acknowledgeNotLongTermDiet = false
+            acknowledgeNotMassGainAvoidance = false
         }
     }
 
@@ -100,13 +113,15 @@ fun PlanScreen(
     }
     val dialogButtonColor = MaterialTheme.colorScheme.primary.toArgb()
     val hasExistingPlan = existingPlan != null
-    val hasPlanChanges = remember(existingPlan, startDate, durationWeeks, dailyTargetKcal) {
+    val hasPlanChanges = remember(existingPlan, startDate, durationWeeks, dailyTargetKcal, goalMode) {
         existingPlan?.let {
             it.startDate != startDate ||
                 it.durationWeeks != durationWeeks ||
-                it.dailyTargetKcal != dailyTargetKcal
+                it.dailyTargetKcal != dailyTargetKcal ||
+                it.goalMode != goalMode
         } ?: true
     }
+    val isSuitabilityConfirmed = acknowledgeNotStrengthPeak && acknowledgeNotLongTermDiet && acknowledgeNotMassGainAvoidance
 
     if (showDataResetDialog) {
         AlertDialog(
@@ -152,11 +167,12 @@ fun PlanScreen(
             bottomBar = {
                 SavePlanBar(
                     buttonLabel = if (hasExistingPlan) "플랜 다시 저장" else "플랜 저장하고 시작하기",
-                    enabled = hasPlanChanges,
+                    enabled = hasPlanChanges && isSuitabilityConfirmed,
+                    suitabilityConfirmed = isSuitabilityConfirmed,
                     onSave = {
-                        viewModel.savePlan(startDate, durationWeeks, dailyTargetKcal)
+                        viewModel.savePlan(startDate, durationWeeks, dailyTargetKcal, goalMode)
                         inlineFeedbackTone = MiniCutInlineFeedbackTone.Info
-                        inlineFeedbackMessage = "플랜을 저장했어요. 홈/캘린더 계산도 같은 기준으로 즉시 반영됩니다."
+                        inlineFeedbackMessage = "플랜을 저장했어요. 목적에 맞는 안내와 종료 후 유지 가이드가 함께 반영됩니다."
                         onSaved()
                     },
                 )
@@ -193,6 +209,7 @@ fun PlanScreen(
                         endDate = endDate,
                         durationWeeks = durationWeeks,
                         dailyTargetKcal = dailyTargetKcal,
+                        goalMode = goalMode,
                     )
                 }
                 item {
@@ -268,6 +285,57 @@ fun PlanScreen(
                                     label = { Text(target.asKcal()) },
                                 )
                             }
+                        }
+                    }
+                }
+                item {
+                    StepCard(
+                        step = "4",
+                        title = "플랜 목적 선택",
+                        description = "목표에 따라 실행 강도와 종료 후 전략이 달라집니다.",
+                    ) {
+                        SelectionChips {
+                            MiniCutGoalMode.entries.forEach { mode ->
+                                FilterChip(
+                                    selected = goalMode == mode,
+                                    onClick = { goalMode = mode },
+                                    modifier = Modifier.semantics {
+                                        selected = goalMode == mode
+                                        contentDescription = "${mode.displayName} ${if (goalMode == mode) "선택됨" else "선택 안 됨"}"
+                                    },
+                                    label = { Text(mode.displayName) },
+                                )
+                            }
+                        }
+                        SupportingText(goalMode.shortDescription)
+                    }
+                }
+                item {
+                    StepCard(
+                        step = "5",
+                        title = "사전 적합성 점검",
+                        description = "아래 조건을 모두 확인해야 안전 모드로 플랜을 저장할 수 있어요.",
+                    ) {
+                        SuitabilityCheckRow(
+                            checked = acknowledgeNotStrengthPeak,
+                            label = "최대 근력(파워/역도) 시합 직전 컨디션이 목적은 아닙니다.",
+                            onToggle = { acknowledgeNotStrengthPeak = !acknowledgeNotStrengthPeak },
+                        )
+                        SuitabilityCheckRow(
+                            checked = acknowledgeNotLongTermDiet,
+                            label = "이번 플랜은 장기 감량 전략이 아니라 2~6주 단기 개입입니다.",
+                            onToggle = { acknowledgeNotLongTermDiet = !acknowledgeNotLongTermDiet },
+                        )
+                        SuitabilityCheckRow(
+                            checked = acknowledgeNotMassGainAvoidance,
+                            label = "벌크업 회피용 반복 다이어트가 아니라 목적 있는 단기 단계입니다.",
+                            onToggle = { acknowledgeNotMassGainAvoidance = !acknowledgeNotMassGainAvoidance },
+                        )
+                        if (!isSuitabilityConfirmed) {
+                            MiniCutInlineFeedback(
+                                message = "3개 항목을 모두 체크하면 저장 버튼이 활성화됩니다.",
+                                tone = MiniCutInlineFeedbackTone.Caution,
+                            )
                         }
                     }
                 }
@@ -436,6 +504,7 @@ private fun PlanSummaryCard(
     endDate: LocalDate,
     durationWeeks: Int,
     dailyTargetKcal: Int,
+    goalMode: MiniCutGoalMode,
 ) {
     Card(
         shape = MiniCutCardShape,
@@ -461,6 +530,7 @@ private fun PlanSummaryCard(
             SummaryHighlight(label = "집중 기간", value = "${durationWeeks}주")
             SummaryRow(label = "시작일", value = startDate.asCompactDate())
             SummaryRow(label = "종료일", value = endDate.asCompactDate())
+            SummaryRow(label = "플랜 목적", value = goalMode.displayName)
             SummaryRow(label = "하루 목표", value = dailyTargetKcal.asKcal())
         }
     }
@@ -585,6 +655,7 @@ private fun SummaryRow(
 private fun SavePlanBar(
     buttonLabel: String,
     enabled: Boolean,
+    suitabilityConfirmed: Boolean,
     onSave: () -> Unit,
 ) {
     Surface(shadowElevation = 8.dp, tonalElevation = 2.dp) {
@@ -603,9 +674,45 @@ private fun SavePlanBar(
                 Text(buttonLabel, style = MaterialTheme.typography.titleMedium)
             }
             Text(
-                text = if (enabled) "저장 후 바로 오늘 기록에서 같은 기준을 사용합니다." else "현재 설정은 이미 저장된 플랜과 동일합니다.",
+                text =
+                    when {
+                        !suitabilityConfirmed -> "사전 적합성 점검 3개 항목을 모두 체크하면 저장할 수 있어요."
+                        enabled -> "저장 후 바로 오늘 기록에서 같은 기준을 사용합니다."
+                        else -> "현재 설정은 이미 저장된 플랜과 동일합니다."
+                    },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SuitabilityCheckRow(
+    checked: Boolean,
+    label: String,
+    onToggle: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MiniCutPillShape,
+        color = if (checked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
+        onClick = onToggle,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(if (checked) "✓" else "○", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Text(
+                label,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }

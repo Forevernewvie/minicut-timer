@@ -86,10 +86,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.minicut.timer.data.local.NotificationPreferences
 import com.minicut.timer.domain.model.CalorieEntry
+import com.minicut.timer.domain.model.CalorieAdjustmentDirection
+import com.minicut.timer.domain.model.CalorieAdjustmentRecommendation
 import com.minicut.timer.domain.model.CalorieRangeStatus
+import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.EntryQuickPreset
+import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
 import com.minicut.timer.domain.model.WeeklyAdherenceReport
+import com.minicut.timer.domain.model.WeeklyWeightTrend
+import com.minicut.timer.domain.model.WeeklyWeightTrendStatus
 import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.notifications.NotificationSettings
 import com.minicut.timer.notifications.ReminderCadence
@@ -207,6 +213,7 @@ fun HomeScreen(
                             endDate = plan.endDate.asCompactDate(),
                             durationWeeks = plan.durationWeeks,
                             dailyTargetKcal = plan.dailyTargetKcal,
+                            goalMode = plan.goalMode,
                             phase = uiState.planPhase ?: MiniCutRules.phaseOf(plan.startDate, plan.endDate, today),
                             progress = MiniCutRules.calculateProgress(plan.startDate, plan.endDate, today),
                             remainingDays = MiniCutRules.remainingDays(plan.startDate, plan.endDate, today),
@@ -215,10 +222,13 @@ fun HomeScreen(
                         )
                     }
                 }
-                if (uiState.planPhase == MiniCutPhase.Completed) {
+                val completedPlan = uiState.plan
+                if (uiState.planPhase == MiniCutPhase.Completed && completedPlan != null) {
                     item {
                         MaintenanceModeCard(
                             checkedSteps = maintenanceChecks,
+                            dailyTargetKcal = completedPlan.dailyTargetKcal,
+                            goalMode = completedPlan.goalMode,
                             onToggleStep = { step ->
                                 maintenanceChecks =
                                     if (step in maintenanceChecks) {
@@ -235,6 +245,22 @@ fun HomeScreen(
                     WeeklyReportCard(
                         report = uiState.weeklyReport,
                         targetCalories = uiState.todayTarget,
+                    )
+                }
+                item {
+                    BodyCompositionCheckCard(
+                        todayCheck = uiState.todayConditionCheck,
+                        weeklyWeightTrend = uiState.weeklyWeightTrend,
+                        recommendedProteinGrams = uiState.recommendedProteinGrams,
+                        calorieAdjustmentRecommendation = uiState.calorieAdjustmentRecommendation,
+                        onOpenPlan = onOpenPlan,
+                        onSave = { bodyWeightKg, proteinGrams, resistanceSets ->
+                            viewModel.saveDailyConditionCheck(bodyWeightKg, proteinGrams, resistanceSets)
+                            showMessage("근손실 방어 체크인을 저장했어요")
+                        },
+                        onInvalidInput = { message ->
+                            showMessage(message)
+                        },
                     )
                 }
                 item {
@@ -458,6 +484,7 @@ private fun PlanOverviewCard(
     endDate: String,
     durationWeeks: Int,
     dailyTargetKcal: Int,
+    goalMode: MiniCutGoalMode,
     phase: MiniCutPhase,
     progress: Float,
     remainingDays: Int,
@@ -513,6 +540,11 @@ private fun PlanOverviewCard(
                 color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "플랜 목적 ${goalMode.displayName} · ${goalMode.shortDescription}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MiniCutMetricTile(
@@ -689,14 +721,17 @@ private fun ReminderSettingRow(
 @Composable
 private fun MaintenanceModeCard(
     checkedSteps: Set<Int>,
+    dailyTargetKcal: Int,
+    goalMode: MiniCutGoalMode,
     onToggleStep: (Int) -> Unit,
     onOpenPlan: () -> Unit,
 ) {
+    val reverseDietPlan = MiniCutRules.reverseDietPlan(dailyTargetKcal = dailyTargetKcal, goalMode = goalMode)
     val checklist =
         listOf(
-            "유지 단계 시작: 하루 목표를 한 단계 높이거나 현재 목표를 3~4일 더 관찰해보세요.",
-            "주 3회는 체중·컨디션을 짧게 체크해서 반등 신호를 먼저 잡으세요.",
-            "이번 주는 하루 한 번만 기록해도 괜찮아요. 기록 리듬만 끊기지 않게 이어가세요.",
+            "종료 후 첫 3~4일은 식사 리듬·수면을 먼저 안정화하세요.",
+            "주 3회는 체중·컨디션을 짧게 체크해 급반등 신호를 빠르게 잡으세요.",
+            "기록량을 줄여도 괜찮지만 하루 1회 기록은 유지해 요요 패턴을 방지하세요.",
         )
 
     Card(
@@ -710,9 +745,34 @@ private fun MaintenanceModeCard(
         ) {
             Text("플랜 종료 후 유지 모드", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
-                "감량 종료 직후 1~2주는 유지 흐름을 만드는 구간이에요. 아래 체크로 다음 주를 준비하세요.",
+                reverseDietPlan.summary,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MiniCutPanelShape,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(reverseDietPlan.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    reverseDietPlan.steps.forEach { step ->
+                        Text(
+                            "• ${step.weekLabel}: ${step.targetCalories.asKcal()} · ${step.note}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        reverseDietPlan.caution,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
             checklist.forEachIndexed { index, label ->
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -790,6 +850,158 @@ private fun WeeklyReportCard(
                 color = MaterialTheme.colorScheme.primary,
             )
             Text(report.focusMessage, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun BodyCompositionCheckCard(
+    todayCheck: DailyConditionCheck?,
+    weeklyWeightTrend: WeeklyWeightTrend,
+    recommendedProteinGrams: Int?,
+    calorieAdjustmentRecommendation: CalorieAdjustmentRecommendation,
+    onOpenPlan: () -> Unit,
+    onSave: (Float?, Int?, Int?) -> Unit,
+    onInvalidInput: (String) -> Unit,
+) {
+    val saveKey = todayCheck?.updatedAt?.toString().orEmpty()
+    var bodyWeightText by rememberSaveable(saveKey) {
+        mutableStateOf(
+            todayCheck?.bodyWeightKg?.let { if (it % 1f == 0f) it.toInt().toString() else it.toString() }.orEmpty(),
+        )
+    }
+    var proteinText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.proteinGrams?.toString().orEmpty()) }
+    var resistanceSetsText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.resistanceSets?.toString().orEmpty()) }
+
+    val trendColor =
+        when (weeklyWeightTrend.status) {
+            WeeklyWeightTrendStatus.InRange -> MaterialTheme.colorScheme.primary
+            WeeklyWeightTrendStatus.NoData -> MaterialTheme.colorScheme.onSurfaceVariant
+            WeeklyWeightTrendStatus.TooSlow -> MaterialTheme.colorScheme.tertiary
+            WeeklyWeightTrendStatus.TooFast -> MaterialTheme.colorScheme.error
+            WeeklyWeightTrendStatus.GainOrStall -> MaterialTheme.colorScheme.error
+        }
+    val trendRateText = weeklyWeightTrend.ratePercentPerWeek?.let { "주당 ${String.format("%.2f", it)}%" } ?: "속도 계산 대기"
+
+    Card(
+        shape = MiniCutCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("근손실 방어 체크인", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                "체중·단백질·저항운동 세트를 함께 기록하면 감량 속도와 근손실 리스크를 바로 점검할 수 있어요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Surface(
+                color = trendColor.copy(alpha = 0.12f),
+                contentColor = trendColor,
+                shape = MiniCutPillShape,
+            ) {
+                Text(
+                    "$trendRateText · ${weeklyWeightTrend.message}",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            if (recommendedProteinGrams != null) {
+                Text(
+                    "권장 단백질: ${recommendedProteinGrams}g (최근 체중 × 2.0g)",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            val recommendationAccent =
+                when (calorieAdjustmentRecommendation.direction) {
+                    CalorieAdjustmentDirection.Keep -> MaterialTheme.colorScheme.onSurfaceVariant
+                    CalorieAdjustmentDirection.Increase -> MaterialTheme.colorScheme.error
+                    CalorieAdjustmentDirection.Decrease -> MaterialTheme.colorScheme.tertiary
+                }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MiniCutPanelShape,
+                color = recommendationAccent.copy(alpha = 0.10f),
+                border = BorderStroke(1.dp, recommendationAccent.copy(alpha = 0.28f)),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        calorieAdjustmentRecommendation.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = recommendationAccent,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "현재 ${calorieAdjustmentRecommendation.currentTargetKcal.asKcal()} → 제안 ${calorieAdjustmentRecommendation.suggestedTargetKcal.asKcal()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        calorieAdjustmentRecommendation.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (calorieAdjustmentRecommendation.actionable) {
+                        OutlinedButton(
+                            onClick = onOpenPlan,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("플랜 화면에서 제안값 확인")
+                        }
+                    }
+                }
+            }
+            OutlinedTextField(
+                value = bodyWeightText,
+                onValueChange = { bodyWeightText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("오늘 체중(kg)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = proteinText,
+                    onValueChange = { proteinText = it.filter(Char::isDigit) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("단백질(g)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                )
+                OutlinedTextField(
+                    value = resistanceSetsText,
+                    onValueChange = { resistanceSetsText = it.filter(Char::isDigit) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("저항운동 세트") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                )
+            }
+            Button(
+                onClick = {
+                    val validation =
+                        validateConditionCheckInput(
+                            bodyWeightText = bodyWeightText,
+                            proteinText = proteinText,
+                            resistanceSetsText = resistanceSetsText,
+                        )
+                    if (!validation.isValid) {
+                        onInvalidInput(validation.errorMessage ?: "입력값을 확인해주세요.")
+                        return@Button
+                    }
+                    onSave(validation.bodyWeightKg, validation.proteinGrams, validation.resistanceSets)
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("체크인 저장")
+            }
         }
     }
 }

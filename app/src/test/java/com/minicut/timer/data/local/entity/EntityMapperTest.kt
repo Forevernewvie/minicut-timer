@@ -3,6 +3,8 @@ package com.minicut.timer.data.local.entity
 import com.minicut.timer.data.local.query.DailyCalorieSummaryRow
 import com.minicut.timer.data.local.query.toDomain
 import com.minicut.timer.domain.model.CalorieEntry
+import com.minicut.timer.domain.model.DailyConditionCheck
+import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPlan
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -20,6 +22,7 @@ class EntityMapperTest {
                 durationWeeks = 4,
                 endDate = LocalDate.of(2026, 5, 7),
                 dailyTargetKcal = 1300,
+                goalMode = MiniCutGoalMode.EventReady,
                 isActive = true,
             )
 
@@ -30,6 +33,7 @@ class EntityMapperTest {
         assertEquals(domain.durationWeeks, mappedBack.durationWeeks)
         assertEquals(domain.endDate, mappedBack.endDate)
         assertEquals(domain.dailyTargetKcal, mappedBack.dailyTargetKcal)
+        assertEquals(domain.goalMode, mappedBack.goalMode)
         assertEquals(domain.isActive, mappedBack.isActive)
     }
 
@@ -73,5 +77,25 @@ class EntityMapperTest {
         assertEquals(LocalDate.of(2026, 4, 10), domain.date)
         assertEquals(1220, domain.totalCalories)
         assertEquals(3, domain.entryCount)
+    }
+
+    @Test
+    fun dailyConditionCheck_entityAndDomainMapping_roundTripsValues() {
+        val domain =
+            DailyConditionCheck(
+                date = LocalDate.of(2026, 4, 10),
+                bodyWeightKg = 78.6f,
+                proteinGrams = 160,
+                resistanceSets = 12,
+                updatedAt = LocalDateTime.of(2026, 4, 10, 20, 30),
+            )
+
+        val entity = domain.toEntity()
+        val mappedBack = entity.toDomain()
+
+        assertEquals(domain.date.toEpochDay(), entity.dateEpochDay)
+        assertEquals(domain.bodyWeightKg, mappedBack.bodyWeightKg)
+        assertEquals(domain.proteinGrams, mappedBack.proteinGrams)
+        assertEquals(domain.resistanceSets, mappedBack.resistanceSets)
     }
 }

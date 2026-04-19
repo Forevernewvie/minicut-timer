@@ -2,7 +2,9 @@ package com.minicut.timer.ui.plan
 
 import com.minicut.timer.data.local.entity.MiniCutPlanEntity
 import com.minicut.timer.data.repository.MiniCutRepository
+import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.testing.FakeCalorieEntryDao
+import com.minicut.timer.testing.FakeDailyConditionCheckDao
 import com.minicut.timer.testing.FakeMiniCutPlanDao
 import com.minicut.timer.testing.MainDispatcherRule
 import java.time.LocalDate
@@ -26,7 +28,7 @@ class PlanViewModelTest {
     @Test
     fun plan_stateReflectsRepositoryUpdates() = runTest {
         val planDao = FakeMiniCutPlanDao()
-        val viewModel = PlanViewModel(MiniCutRepository(planDao, FakeCalorieEntryDao()))
+        val viewModel = PlanViewModel(MiniCutRepository(planDao, FakeCalorieEntryDao(), FakeDailyConditionCheckDao()))
         val collectionJob =
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 viewModel.plan.collect()
@@ -56,18 +58,20 @@ class PlanViewModelTest {
     fun savePlan_andClearAllData_delegateToRepository() = runTest {
         val planDao = FakeMiniCutPlanDao()
         val calorieDao = FakeCalorieEntryDao()
-        val viewModel = PlanViewModel(MiniCutRepository(planDao, calorieDao))
+        val viewModel = PlanViewModel(MiniCutRepository(planDao, calorieDao, FakeDailyConditionCheckDao()))
 
         viewModel.savePlan(
             startDate = LocalDate.of(2026, 4, 10),
             durationWeeks = 4,
             dailyTargetKcal = 1500,
+            goalMode = MiniCutGoalMode.EventReady,
         )
         advanceUntilIdle()
 
         assertEquals(LocalDate.of(2026, 4, 10).toEpochDay(), planDao.lastUpsert?.startDateEpochDay)
         assertEquals(LocalDate.of(2026, 5, 7).toEpochDay(), planDao.lastUpsert?.endDateEpochDay)
         assertEquals(1500, planDao.lastUpsert?.dailyTargetKcal)
+        assertEquals(MiniCutGoalMode.EventReady.name, planDao.lastUpsert?.goalMode)
 
         viewModel.clearAllData()
         advanceUntilIdle()

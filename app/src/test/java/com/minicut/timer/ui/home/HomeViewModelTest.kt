@@ -1,13 +1,16 @@
 package com.minicut.timer.ui.home
 
 import com.minicut.timer.data.local.entity.CalorieEntryEntity
+import com.minicut.timer.data.local.entity.DailyConditionCheckEntity
 import com.minicut.timer.data.local.entity.MiniCutPlanEntity
 import com.minicut.timer.data.repository.MiniCutRepository
 import com.minicut.timer.domain.model.CalorieEntry
+import com.minicut.timer.domain.model.CalorieAdjustmentDirection
 import com.minicut.timer.domain.model.CalorieRangeStatus
 import com.minicut.timer.domain.model.EntryQuickPreset
 import com.minicut.timer.domain.model.MiniCutPhase
 import com.minicut.timer.testing.FakeCalorieEntryDao
+import com.minicut.timer.testing.FakeDailyConditionCheckDao
 import com.minicut.timer.testing.FakeMiniCutPlanDao
 import com.minicut.timer.testing.MainDispatcherRule
 import java.time.LocalDate
@@ -36,9 +39,10 @@ class HomeViewModelTest {
         val today = LocalDate.now()
         val planDao = FakeMiniCutPlanDao()
         val calorieDao = FakeCalorieEntryDao()
+        val dailyConditionDao = FakeDailyConditionCheckDao()
         val viewModel =
             HomeViewModel(
-                repository = MiniCutRepository(planDao, calorieDao),
+                repository = MiniCutRepository(planDao, calorieDao, dailyConditionDao),
                 dateTickerFlow = flowOf(today),
             )
         val collectionJob =
@@ -103,9 +107,10 @@ class HomeViewModelTest {
     fun addUpdateAndDeleteEntry_forwardActionsThroughRepository() = runTest {
         val today = LocalDate.now()
         val calorieDao = FakeCalorieEntryDao()
+        val dailyConditionDao = FakeDailyConditionCheckDao()
         val viewModel =
             HomeViewModel(
-                repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao),
+                repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao, dailyConditionDao),
                 dateTickerFlow = flowOf(today),
             )
 
@@ -160,9 +165,10 @@ class HomeViewModelTest {
         val today = LocalDate.of(2026, 4, 10)
         val planDao = FakeMiniCutPlanDao()
         val calorieDao = FakeCalorieEntryDao()
+        val dailyConditionDao = FakeDailyConditionCheckDao()
         val viewModel =
             HomeViewModel(
-                repository = MiniCutRepository(planDao, calorieDao),
+                repository = MiniCutRepository(planDao, calorieDao, dailyConditionDao),
                 dateTickerFlow = flowOf(today),
             )
         val collectionJob =
@@ -220,9 +226,10 @@ class HomeViewModelTest {
     fun addEntryFromPreset_andToggleFavorite_forwardToRepository() = runTest {
         val today = LocalDate.of(2026, 4, 10)
         val calorieDao = FakeCalorieEntryDao()
+        val dailyConditionDao = FakeDailyConditionCheckDao()
         val viewModel =
             HomeViewModel(
-                repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao),
+                repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao, dailyConditionDao),
                 dateTickerFlow = flowOf(today),
             )
 
@@ -252,5 +259,168 @@ class HomeViewModelTest {
         assertEquals("요거트", calorieDao.lastInserted?.foodName)
         assertEquals(180, calorieDao.lastInserted?.calories)
         assertEquals(88L to true, calorieDao.lastFavoriteUpdate)
+    }
+
+    @Test
+    fun saveDailyConditionCheck_updatesTrendAndProteinGuidance() = runTest {
+        val today = LocalDate.of(2026, 4, 10)
+        val dailyConditionDao = FakeDailyConditionCheckDao()
+        dailyConditionDao.seedChecks(
+            listOf(
+                DailyConditionCheckEntity(
+                    dateEpochDay = today.minusDays(7).toEpochDay(),
+                    bodyWeightKg = 80f,
+                    proteinGrams = 150,
+                    resistanceSets = 8,
+                    updatedAtEpochMillis = LocalDateTime.of(2026, 4, 3, 9, 0)
+                        .atZone(ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli(),
+                ),
+            ),
+        )
+        val viewModel =
+            HomeViewModel(
+                repository = MiniCutRepository(FakeMiniCutPlanDao(), FakeCalorieEntryDao(), dailyConditionDao),
+                dateTickerFlow = flowOf(today),
+            )
+        val collectionJob =
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.uiState.collect()
+            }
+
+        viewModel.saveDailyConditionCheck(
+            bodyWeightKg = 79.2f,
+            proteinGrams = 160,
+            resistanceSets = 10,
+        )
+        runCurrent()
+
+        assertEquals(today.toEpochDay(), dailyConditionDao.lastUpsert?.dateEpochDay)
+        assertEquals(79.2f, dailyConditionDao.lastUpsert?.bodyWeightKg)
+        assertEquals(160, dailyConditionDao.lastUpsert?.proteinGrams)
+        assertEquals(10, dailyConditionDao.lastUpsert?.resistanceSets)
+
+        val state = viewModel.uiState.value
+        assertEquals(158, state.recommendedProteinGrams)
+        assertTrue((state.weeklyWeightTrend.ratePercentPerWeek ?: 0f) > 0f)
+        assertEquals(CalorieAdjustmentDirection.Keep, state.calorieAdjustmentRecommendation.direction)
+        assertEquals(1300, state.calorieAdjustmentRecommendation.suggestedTargetKcal)
+        collectionJob.cancel()
+    }
+
+    @Test
+    fun saveDailyConditionCheck_withZeroOnlyValues_doesNotPersist() = runTest {
+        val today = LocalDate.of(2026, 4, 10)
+        val dailyConditionDao = FakeDailyConditionCheckDao()
+        val viewModel =
+            HomeViewModel(
+                repository = MiniCutRepository(FakeMiniCutPlanDao(), FakeCalorieEntryDao(), dailyConditionDao),
+                dateTickerFlow = flowOf(today),
+            )
+
+        viewModel.saveDailyConditionCheck(
+            bodyWeightKg = 0f,
+            proteinGrams = 0,
+            resistanceSets = 0,
+        )
+        runCurrent()
+
+        assertEquals(null, dailyConditionDao.lastUpsert)
+        assertEquals(null, viewModel.uiState.value.todayConditionCheck)
+    }
+
+    @Test
+    fun uiState_suggestsLowerTargetWhenWeeklyWeightTrendIsTooSlow() = runTest {
+        val today = LocalDate.of(2026, 4, 10)
+        val dailyConditionDao = FakeDailyConditionCheckDao()
+        dailyConditionDao.seedChecks(
+            listOf(
+                DailyConditionCheckEntity(
+                    dateEpochDay = today.minusDays(7).toEpochDay(),
+                    bodyWeightKg = 80f,
+                    proteinGrams = 150,
+                    resistanceSets = 8,
+                    updatedAtEpochMillis = LocalDateTime.of(2026, 4, 3, 9, 0)
+                        .atZone(ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli(),
+                ),
+                DailyConditionCheckEntity(
+                    dateEpochDay = today.toEpochDay(),
+                    bodyWeightKg = 79.8f,
+                    proteinGrams = 150,
+                    resistanceSets = 8,
+                    updatedAtEpochMillis = LocalDateTime.of(2026, 4, 10, 9, 0)
+                        .atZone(ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli(),
+                ),
+            ),
+        )
+
+        val viewModel =
+            HomeViewModel(
+                repository = MiniCutRepository(FakeMiniCutPlanDao(), FakeCalorieEntryDao(), dailyConditionDao),
+                dateTickerFlow = flowOf(today),
+            )
+        val collectionJob =
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.uiState.collect()
+            }
+        runCurrent()
+
+        val recommendation = viewModel.uiState.value.calorieAdjustmentRecommendation
+        assertEquals(CalorieAdjustmentDirection.Decrease, recommendation.direction)
+        assertEquals(1200, recommendation.suggestedTargetKcal)
+        assertTrue(recommendation.actionable)
+        collectionJob.cancel()
+    }
+
+    @Test
+    fun uiState_suggestsHigherTargetWhenWeeklyWeightTrendIsTooFast() = runTest {
+        val today = LocalDate.of(2026, 4, 10)
+        val dailyConditionDao = FakeDailyConditionCheckDao()
+        dailyConditionDao.seedChecks(
+            listOf(
+                DailyConditionCheckEntity(
+                    dateEpochDay = today.minusDays(7).toEpochDay(),
+                    bodyWeightKg = 80f,
+                    proteinGrams = 160,
+                    resistanceSets = 10,
+                    updatedAtEpochMillis = LocalDateTime.of(2026, 4, 3, 9, 0)
+                        .atZone(ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli(),
+                ),
+                DailyConditionCheckEntity(
+                    dateEpochDay = today.toEpochDay(),
+                    bodyWeightKg = 78.8f,
+                    proteinGrams = 170,
+                    resistanceSets = 11,
+                    updatedAtEpochMillis = LocalDateTime.of(2026, 4, 10, 9, 0)
+                        .atZone(ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli(),
+                ),
+            ),
+        )
+
+        val viewModel =
+            HomeViewModel(
+                repository = MiniCutRepository(FakeMiniCutPlanDao(), FakeCalorieEntryDao(), dailyConditionDao),
+                dateTickerFlow = flowOf(today),
+            )
+        val collectionJob =
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.uiState.collect()
+            }
+        runCurrent()
+
+        val recommendation = viewModel.uiState.value.calorieAdjustmentRecommendation
+        assertEquals(CalorieAdjustmentDirection.Increase, recommendation.direction)
+        assertEquals(1400, recommendation.suggestedTargetKcal)
+        assertTrue(recommendation.actionable)
+        collectionJob.cancel()
     }
 }

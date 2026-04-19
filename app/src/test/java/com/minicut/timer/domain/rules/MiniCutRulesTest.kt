@@ -1,14 +1,20 @@
 package com.minicut.timer.domain.rules
 
 import com.minicut.timer.domain.model.CalorieRangeStatus
+import com.minicut.timer.domain.model.CalorieAdjustmentDirection
+import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.DailyCalorieSummary
+import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
 import com.minicut.timer.domain.model.TargetGuidanceTone
+import com.minicut.timer.domain.model.WeeklyWeightTrend
+import com.minicut.timer.domain.model.WeeklyWeightTrendStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class MiniCutRulesTest {
 
@@ -126,5 +132,146 @@ class MiniCutRulesTest {
         assertEquals(TargetGuidanceTone.Caution, caution.tone)
         assertEquals(TargetGuidanceTone.Recommended, recommended.tone)
         assertEquals(TargetGuidanceTone.Flexible, flexible.tone)
+    }
+
+    @Test
+    fun reverseDietPlan_increasesTargetsStepwiseByGoalMode() {
+        val massReset = MiniCutRules.reverseDietPlan(dailyTargetKcal = 1300, goalMode = MiniCutGoalMode.MassReset)
+        val eventReady = MiniCutRules.reverseDietPlan(dailyTargetKcal = 1300, goalMode = MiniCutGoalMode.EventReady)
+
+        assertEquals(3, massReset.steps.size)
+        assertEquals(1420, massReset.steps.first().targetCalories)
+        assertEquals(1450, eventReady.steps.first().targetCalories)
+        assertTrue(eventReady.steps.last().targetCalories > massReset.steps.last().targetCalories)
+    }
+
+    @Test
+    fun weeklyWeightTrend_classifiesSpeedBand() {
+        val checks =
+            listOf(
+                DailyConditionCheck(
+                    date = LocalDate.of(2026, 4, 1),
+                    bodyWeightKg = 80f,
+                    updatedAt = LocalDateTime.of(2026, 4, 1, 9, 0),
+                ),
+                DailyConditionCheck(
+                    date = LocalDate.of(2026, 4, 8),
+                    bodyWeightKg = 79f,
+                    updatedAt = LocalDateTime.of(2026, 4, 8, 9, 0),
+                ),
+            )
+
+        val trend = MiniCutRules.weeklyWeightTrend(checks)
+
+        assertEquals(WeeklyWeightTrendStatus.InRange, trend.status)
+        assertEquals(1.25f, trend.ratePercentPerWeek)
+    }
+
+    @Test
+    fun recommendedProteinGrams_matchesWeightTimesTwoRule() {
+        assertEquals(160, MiniCutRules.recommendedProteinGrams(80f))
+        assertEquals(null, MiniCutRules.recommendedProteinGrams(null))
+    }
+
+    @Test
+    fun calorieAdjustmentRecommendation_suggestsLowerTargetWhenTrendIsSlow() {
+        val recommendation =
+            MiniCutRules.calorieAdjustmentRecommendation(
+                currentTargetKcal = 1300,
+                weeklyWeightTrend =
+                    WeeklyWeightTrend(
+                        status = WeeklyWeightTrendStatus.TooSlow,
+                        ratePercentPerWeek = 0.4f,
+                    ),
+            )
+
+        assertEquals(CalorieAdjustmentDirection.Decrease, recommendation.direction)
+        assertEquals(1200, recommendation.suggestedTargetKcal)
+        assertEquals(true, recommendation.actionable)
+    }
+
+    @Test
+    fun calorieAdjustmentRecommendation_keepsTargetWhenInRange() {
+        val recommendation =
+            MiniCutRules.calorieAdjustmentRecommendation(
+                currentTargetKcal = 1300,
+                weeklyWeightTrend =
+                    WeeklyWeightTrend(
+                        status = WeeklyWeightTrendStatus.InRange,
+                        ratePercentPerWeek = 1.0f,
+                    ),
+            )
+
+        assertEquals(CalorieAdjustmentDirection.Keep, recommendation.direction)
+        assertEquals(1300, recommendation.suggestedTargetKcal)
+        assertEquals(false, recommendation.actionable)
+    }
+
+    @Test
+    fun calorieAdjustmentRecommendation_suggestsHigherTargetWhenTrendTooFast() {
+        val recommendation =
+            MiniCutRules.calorieAdjustmentRecommendation(
+                currentTargetKcal = 1300,
+                weeklyWeightTrend =
+                    WeeklyWeightTrend(
+                        status = WeeklyWeightTrendStatus.TooFast,
+                        ratePercentPerWeek = 1.8f,
+                    ),
+            )
+
+        assertEquals(CalorieAdjustmentDirection.Increase, recommendation.direction)
+        assertEquals(1400, recommendation.suggestedTargetKcal)
+        assertEquals(true, recommendation.actionable)
+    }
+
+    @Test
+    fun calorieAdjustmentRecommendation_respectsLowerBoundaryOption() {
+        val recommendation =
+            MiniCutRules.calorieAdjustmentRecommendation(
+                currentTargetKcal = 1000,
+                weeklyWeightTrend =
+                    WeeklyWeightTrend(
+                        status = WeeklyWeightTrendStatus.GainOrStall,
+                        ratePercentPerWeek = -0.2f,
+                    ),
+            )
+
+        assertEquals(CalorieAdjustmentDirection.Keep, recommendation.direction)
+        assertEquals(1000, recommendation.suggestedTargetKcal)
+        assertEquals(false, recommendation.actionable)
+    }
+
+    @Test
+    fun calorieAdjustmentRecommendation_decreasesForGainOrStall() {
+        val recommendation =
+            MiniCutRules.calorieAdjustmentRecommendation(
+                currentTargetKcal = 1300,
+                weeklyWeightTrend =
+                    WeeklyWeightTrend(
+                        status = WeeklyWeightTrendStatus.GainOrStall,
+                        ratePercentPerWeek = -0.2f,
+                    ),
+            )
+
+        assertEquals(CalorieAdjustmentDirection.Decrease, recommendation.direction)
+        assertEquals(1200, recommendation.suggestedTargetKcal)
+        assertEquals(true, recommendation.actionable)
+    }
+
+    @Test
+    fun calorieAdjustmentRecommendation_respectsUpperBoundaryOption() {
+        val recommendation =
+            MiniCutRules.calorieAdjustmentRecommendation(
+                currentTargetKcal = 1500,
+                weeklyWeightTrend =
+                    WeeklyWeightTrend(
+                        status = WeeklyWeightTrendStatus.TooFast,
+                        ratePercentPerWeek = 1.9f,
+                    ),
+            )
+
+        assertEquals(CalorieAdjustmentDirection.Keep, recommendation.direction)
+        assertEquals(1500, recommendation.suggestedTargetKcal)
+        assertEquals(false, recommendation.actionable)
     }
 }

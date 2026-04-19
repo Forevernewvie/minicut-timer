@@ -5,11 +5,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.minicut.timer.data.repository.MiniCutRepository
 import com.minicut.timer.domain.model.CalorieEntry
+import com.minicut.timer.domain.model.CalorieAdjustmentRecommendation
 import com.minicut.timer.domain.model.CalorieRangeStatus
+import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.EntryQuickPreset
 import com.minicut.timer.domain.model.MiniCutPlan
 import com.minicut.timer.domain.model.MiniCutPhase
 import com.minicut.timer.domain.model.WeeklyAdherenceReport
+import com.minicut.timer.domain.model.WeeklyWeightTrend
 import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.ui.util.currentDateTickerFlow
 import com.minicut.timer.ui.util.miniCutViewModelFactory
@@ -36,6 +39,14 @@ data class HomeUiState(
     val recentPresets: List<EntryQuickPreset> = emptyList(),
     val favoritePresets: List<EntryQuickPreset> = emptyList(),
     val weeklyReport: WeeklyAdherenceReport = WeeklyAdherenceReport(),
+    val todayConditionCheck: DailyConditionCheck? = null,
+    val weeklyWeightTrend: WeeklyWeightTrend = WeeklyWeightTrend(),
+    val recommendedProteinGrams: Int? = null,
+    val calorieAdjustmentRecommendation: CalorieAdjustmentRecommendation =
+        MiniCutRules.calorieAdjustmentRecommendation(
+            currentTargetKcal = MiniCutRules.DEFAULT_TARGET_KCAL,
+            weeklyWeightTrend = WeeklyWeightTrend(),
+        ),
 )
 
 private data class HomePrimaryState(
@@ -45,6 +56,8 @@ private data class HomePrimaryState(
     val entries: List<CalorieEntry>,
     val recentPresets: List<EntryQuickPreset>,
     val favoritePresets: List<EntryQuickPreset>,
+    val todayConditionCheck: DailyConditionCheck?,
+    val weeklyConditionChecks: List<DailyConditionCheck>,
 )
 
 private data class HomeCoreState(
@@ -98,7 +111,17 @@ class HomeViewModel(
         }
 
     private val primaryStateFlow =
-        combine(coreStateFlow, presetsFlow) { core, presets ->
+        combine(
+            coreStateFlow,
+            presetsFlow,
+            currentDateFlow.flatMapLatest { date -> repository.observeDailyConditionCheck(date) },
+            currentDateFlow.flatMapLatest { date ->
+                repository.observeDailyConditionChecks(
+                    startDate = date.minusDays(13),
+                    endDate = date,
+                )
+            },
+        ) { core, presets, todayConditionCheck, weeklyConditionChecks ->
             HomePrimaryState(
                 plan = core.plan,
                 currentDate = core.currentDate,
@@ -106,6 +129,8 @@ class HomeViewModel(
                 entries = core.entries,
                 recentPresets = presets.first,
                 favoritePresets = presets.second,
+                todayConditionCheck = todayConditionCheck,
+                weeklyConditionChecks = weeklyConditionChecks,
             )
         }
 
@@ -113,6 +138,10 @@ class HomeViewModel(
         combine(primaryStateFlow, weeklySummariesFlow) { primaryState, weeklySummaries ->
             val target = primaryState.plan?.dailyTargetKcal ?: MiniCutRules.DEFAULT_TARGET_KCAL
             val planPhase = primaryState.plan?.let { MiniCutRules.phaseOf(it.startDate, it.endDate, primaryState.currentDate) }
+            val weeklyWeightTrend = MiniCutRules.weeklyWeightTrend(primaryState.weeklyConditionChecks)
+            val latestWeight =
+                primaryState.todayConditionCheck?.bodyWeightKg
+                    ?: primaryState.weeklyConditionChecks.lastOrNull { (it.bodyWeightKg ?: 0f) > 0f }?.bodyWeightKg
             HomeUiState(
                 currentDate = primaryState.currentDate,
                 plan = primaryState.plan,
@@ -126,6 +155,14 @@ class HomeViewModel(
                 recentPresets = primaryState.recentPresets,
                 favoritePresets = primaryState.favoritePresets,
                 weeklyReport = MiniCutRules.weeklyAdherenceReport(weeklySummaries, target),
+                todayConditionCheck = primaryState.todayConditionCheck,
+                weeklyWeightTrend = weeklyWeightTrend,
+                recommendedProteinGrams = MiniCutRules.recommendedProteinGrams(latestWeight),
+                calorieAdjustmentRecommendation =
+                    MiniCutRules.calorieAdjustmentRecommendation(
+                        currentTargetKcal = target,
+                        weeklyWeightTrend = weeklyWeightTrend,
+                    ),
             )
         }.stateIn(
             scope = viewModelScope,
@@ -188,6 +225,21 @@ class HomeViewModel(
             repository.updateEntryFavorite(
                 entryId = entry.id,
                 isFavorite = !entry.isFavorite,
+            )
+        }
+    }
+
+    fun saveDailyConditionCheck(
+        bodyWeightKg: Float?,
+        proteinGrams: Int?,
+        resistanceSets: Int?,
+    ) {
+        viewModelScope.launch {
+            repository.upsertDailyConditionCheck(
+                date = currentDateFlow.value,
+                bodyWeightKg = bodyWeightKg,
+                proteinGrams = proteinGrams,
+                resistanceSets = resistanceSets,
             )
         }
     }

@@ -1,8 +1,10 @@
 package com.minicut.timer.testing
 
 import com.minicut.timer.data.local.dao.CalorieEntryDao
+import com.minicut.timer.data.local.dao.DailyConditionCheckDao
 import com.minicut.timer.data.local.dao.MiniCutPlanDao
 import com.minicut.timer.data.local.entity.CalorieEntryEntity
+import com.minicut.timer.data.local.entity.DailyConditionCheckEntity
 import com.minicut.timer.data.local.entity.MiniCutPlanEntity
 import com.minicut.timer.data.local.query.DailyCalorieSummaryRow
 import kotlinx.coroutines.flow.Flow
@@ -130,4 +132,49 @@ class FakeCalorieEntryDao : CalorieEntryDao {
     }
 
     private fun <T> MutableStateFlow<List<T>>?.orEmpty(): List<T> = this?.value.orEmpty()
+}
+
+class FakeDailyConditionCheckDao : DailyConditionCheckDao {
+    private val checksByDate = mutableMapOf<Long, MutableStateFlow<DailyConditionCheckEntity?>>()
+    private val allChecksFlow = MutableStateFlow<List<DailyConditionCheckEntity>>(emptyList())
+    var lastUpsert: DailyConditionCheckEntity? = null
+    var deleteAllCalls: Int = 0
+
+    override suspend fun upsert(check: DailyConditionCheckEntity) {
+        lastUpsert = check
+        checksByDate.getOrPut(check.dateEpochDay) { MutableStateFlow(null) }.value = check
+        syncAllChecks()
+    }
+
+    override fun observeForDate(dateEpochDay: Long): Flow<DailyConditionCheckEntity?> =
+        checksByDate.getOrPut(dateEpochDay) { MutableStateFlow(null) }
+
+    override fun observeInRange(
+        startEpochDay: Long,
+        endEpochDay: Long,
+    ): Flow<List<DailyConditionCheckEntity>> =
+        allChecksFlow.map { checks ->
+            checks.filter { it.dateEpochDay in startEpochDay..endEpochDay }
+        }
+
+    override suspend fun deleteAll() {
+        deleteAllCalls += 1
+        checksByDate.values.forEach { it.value = null }
+        allChecksFlow.value = emptyList()
+    }
+
+    fun seedChecks(checks: List<DailyConditionCheckEntity>) {
+        checksByDate.clear()
+        checks.forEach { check ->
+            checksByDate.getOrPut(check.dateEpochDay) { MutableStateFlow(null) }.value = check
+        }
+        syncAllChecks()
+    }
+
+    private fun syncAllChecks() {
+        allChecksFlow.value =
+            checksByDate.values
+                .mapNotNull { it.value }
+                .sortedBy { it.dateEpochDay }
+    }
 }

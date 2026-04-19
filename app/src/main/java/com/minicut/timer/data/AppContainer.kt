@@ -11,12 +11,17 @@ class AppContainer(context: Context) {
             context,
             MiniCutDatabase::class.java,
             "mini_cut_timer.db",
-        ).addMigrations(MiniCutDatabase.MIGRATION_3_4)
+        ).addMigrations(
+            MiniCutDatabase.MIGRATION_3_4,
+            MiniCutDatabase.MIGRATION_4_5,
+            MiniCutDatabase.MIGRATION_5_6,
+        )
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 
     val repository = MiniCutRepository(
         planDao = database.planDao(),
         calorieEntryDao = database.calorieEntryDao(),
+        dailyConditionCheckDao = database.dailyConditionCheckDao(),
     )
 }
