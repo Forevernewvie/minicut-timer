@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.minicut.timer.data.repository.MiniCutRepository
+import com.minicut.timer.domain.model.ActivityLevel
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPlan
 import com.minicut.timer.ui.util.miniCutViewModelFactory
@@ -28,9 +29,18 @@ class PlanViewModel(
         durationWeeks: Int,
         dailyTargetKcal: Int,
         goalMode: MiniCutGoalMode,
+        activityLevel: ActivityLevel,
+        estimatedMaintenanceKcal: Int,
     ) {
         viewModelScope.launch {
-            repository.savePlan(startDate, durationWeeks, dailyTargetKcal, goalMode)
+            repository.savePlan(
+                startDate = startDate,
+                durationWeeks = durationWeeks,
+                dailyTargetKcal = dailyTargetKcal,
+                goalMode = goalMode,
+                activityLevel = activityLevel,
+                estimatedMaintenanceKcal = estimatedMaintenanceKcal,
+            )
         }
     }
 

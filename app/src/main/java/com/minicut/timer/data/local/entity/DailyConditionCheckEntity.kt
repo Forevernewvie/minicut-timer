@@ -14,6 +14,11 @@ data class DailyConditionCheckEntity(
     val bodyWeightKg: Float? = null,
     val proteinGrams: Int? = null,
     val resistanceSets: Int? = null,
+    val sleepHours: Float? = null,
+    val fatigueScore: Int? = null,
+    val hungerScore: Int? = null,
+    val moodScore: Int? = null,
+    val workoutPerformanceScore: Int? = null,
     val updatedAtEpochMillis: Long,
 )
 
@@ -23,6 +28,11 @@ fun DailyConditionCheckEntity.toDomain(): DailyConditionCheck =
         bodyWeightKg = bodyWeightKg,
         proteinGrams = proteinGrams,
         resistanceSets = resistanceSets,
+        sleepHours = sleepHours,
+        fatigueScore = fatigueScore,
+        hungerScore = hungerScore,
+        moodScore = moodScore,
+        workoutPerformanceScore = workoutPerformanceScore,
         updatedAt = LocalDateTime.ofInstant(Instant.ofEpochMilli(updatedAtEpochMillis), ZoneId.systemDefault()),
     )
 
@@ -32,5 +42,10 @@ fun DailyConditionCheck.toEntity(): DailyConditionCheckEntity =
         bodyWeightKg = bodyWeightKg,
         proteinGrams = proteinGrams,
         resistanceSets = resistanceSets,
+        sleepHours = sleepHours,
+        fatigueScore = fatigueScore,
+        hungerScore = hungerScore,
+        moodScore = moodScore,
+        workoutPerformanceScore = workoutPerformanceScore,
         updatedAtEpochMillis = updatedAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
     )

@@ -13,7 +13,7 @@ import com.minicut.timer.data.local.entity.MiniCutPlanEntity
 
 @Database(
     entities = [MiniCutPlanEntity::class, CalorieEntryEntity::class, DailyConditionCheckEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class MiniCutDatabase : RoomDatabase() {
@@ -54,6 +54,33 @@ abstract class MiniCutDatabase : RoomDatabase() {
                             PRIMARY KEY(dateEpochDay)
                         )
                         """.trimIndent(),
+                    )
+                }
+            }
+
+        val MIGRATION_6_7 =
+            object : Migration(6, 7) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "ALTER TABLE mini_cut_plan ADD COLUMN activityLevel TEXT NOT NULL DEFAULT 'Moderate'",
+                    )
+                    db.execSQL(
+                        "ALTER TABLE mini_cut_plan ADD COLUMN estimatedMaintenanceKcal INTEGER NOT NULL DEFAULT 0",
+                    )
+                    db.execSQL(
+                        "ALTER TABLE daily_condition_checks ADD COLUMN sleepHours REAL",
+                    )
+                    db.execSQL(
+                        "ALTER TABLE daily_condition_checks ADD COLUMN fatigueScore INTEGER",
+                    )
+                    db.execSQL(
+                        "ALTER TABLE daily_condition_checks ADD COLUMN hungerScore INTEGER",
+                    )
+                    db.execSQL(
+                        "ALTER TABLE daily_condition_checks ADD COLUMN moodScore INTEGER",
+                    )
+                    db.execSQL(
+                        "ALTER TABLE daily_condition_checks ADD COLUMN workoutPerformanceScore INTEGER",
                     )
                 }
             }

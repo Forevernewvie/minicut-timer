@@ -8,6 +8,7 @@ import com.minicut.timer.data.local.query.DailyCalorieSummaryRow
 import com.minicut.timer.domain.model.CalorieEntry
 import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.EntryQuickPreset
+import com.minicut.timer.domain.model.ActivityLevel
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.testing.FakeCalorieEntryDao
 import com.minicut.timer.testing.FakeDailyConditionCheckDao
@@ -37,6 +38,8 @@ class MiniCutRepositoryTest {
             durationWeeks = 4,
             dailyTargetKcal = 1300,
             goalMode = MiniCutGoalMode.EventReady,
+            activityLevel = ActivityLevel.High,
+            estimatedMaintenanceKcal = 2500,
         )
 
         val saved = planDao.lastUpsert
@@ -46,6 +49,8 @@ class MiniCutRepositoryTest {
         assertEquals(LocalDate.of(2026, 5, 7).toEpochDay(), saved?.endDateEpochDay)
         assertEquals(1300, saved?.dailyTargetKcal)
         assertEquals(MiniCutGoalMode.EventReady.name, saved?.goalMode)
+        assertEquals(ActivityLevel.High.name, saved?.activityLevel)
+        assertEquals(2500, saved?.estimatedMaintenanceKcal)
         assertEquals(true, saved?.isActive)
     }
 
@@ -322,6 +327,11 @@ class MiniCutRepositoryTest {
             bodyWeightKg = 78.4f,
             proteinGrams = 160,
             resistanceSets = 12,
+            sleepHours = 7.0f,
+            fatigueScore = 2,
+            hungerScore = 3,
+            moodScore = 4,
+            workoutPerformanceScore = 4,
         )
 
         val oneDay = repository.observeDailyConditionCheck(date).first()
@@ -330,6 +340,8 @@ class MiniCutRepositoryTest {
         assertEquals(78.4f, oneDay?.bodyWeightKg)
         assertEquals(160, oneDay?.proteinGrams)
         assertEquals(12, oneDay?.resistanceSets)
+        assertEquals(7.0f, oneDay?.sleepHours)
+        assertEquals(2, oneDay?.fatigueScore)
         assertEquals(1, range.size)
         assertEquals(date, range.first().date)
     }
@@ -345,6 +357,11 @@ class MiniCutRepositoryTest {
             bodyWeightKg = 0f,
             proteinGrams = 0,
             resistanceSets = 0,
+            sleepHours = 0f,
+            fatigueScore = 0,
+            hungerScore = 0,
+            moodScore = 0,
+            workoutPerformanceScore = 0,
         )
 
         val observed = repository.observeDailyConditionCheck(date).first()

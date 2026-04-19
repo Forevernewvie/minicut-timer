@@ -12,6 +12,7 @@ import com.minicut.timer.domain.model.CalorieEntry
 import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.DailyCalorieSummary
 import com.minicut.timer.domain.model.EntryQuickPreset
+import com.minicut.timer.domain.model.ActivityLevel
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPlan
 import com.minicut.timer.domain.rules.MiniCutRules
@@ -78,6 +79,8 @@ class MiniCutRepository(
         durationWeeks: Int,
         dailyTargetKcal: Int,
         goalMode: MiniCutGoalMode = MiniCutGoalMode.MassReset,
+        activityLevel: ActivityLevel = ActivityLevel.Moderate,
+        estimatedMaintenanceKcal: Int = 0,
     ) {
         val endDate = MiniCutRules.calculateEndDate(startDate, durationWeeks)
         require(MiniCutRules.isValidTarget(dailyTargetKcal)) {
@@ -90,6 +93,8 @@ class MiniCutRepository(
                 endDate = endDate,
                 dailyTargetKcal = dailyTargetKcal,
                 goalMode = goalMode,
+                activityLevel = activityLevel,
+                estimatedMaintenanceKcal = estimatedMaintenanceKcal,
                 isActive = true,
             ).toEntity(),
         )
@@ -169,8 +174,22 @@ class MiniCutRepository(
         bodyWeightKg: Float?,
         proteinGrams: Int?,
         resistanceSets: Int?,
+        sleepHours: Float?,
+        fatigueScore: Int?,
+        hungerScore: Int?,
+        moodScore: Int?,
+        workoutPerformanceScore: Int?,
     ) {
-        if ((bodyWeightKg ?: 0f) <= 0f && (proteinGrams ?: 0) <= 0 && (resistanceSets ?: 0) <= 0) {
+        val hasAnySignal =
+            (bodyWeightKg ?: 0f) > 0f ||
+                (proteinGrams ?: 0) > 0 ||
+                (resistanceSets ?: 0) > 0 ||
+                (sleepHours ?: 0f) > 0f ||
+                (fatigueScore ?: 0) > 0 ||
+                (hungerScore ?: 0) > 0 ||
+                (moodScore ?: 0) > 0 ||
+                (workoutPerformanceScore ?: 0) > 0
+        if (!hasAnySignal) {
             return
         }
         dailyConditionCheckDao.upsert(
@@ -179,6 +198,11 @@ class MiniCutRepository(
                 bodyWeightKg = bodyWeightKg?.takeIf { it > 0f },
                 proteinGrams = proteinGrams?.takeIf { it > 0 },
                 resistanceSets = resistanceSets?.takeIf { it > 0 },
+                sleepHours = sleepHours?.takeIf { it > 0f },
+                fatigueScore = fatigueScore?.takeIf { it in 1..5 },
+                hungerScore = hungerScore?.takeIf { it in 1..5 },
+                moodScore = moodScore?.takeIf { it in 1..5 },
+                workoutPerformanceScore = workoutPerformanceScore?.takeIf { it in 1..5 },
                 updatedAtEpochMillis = LocalDateTime.now()
                     .atZone(java.time.ZoneId.systemDefault())
                     .toInstant()

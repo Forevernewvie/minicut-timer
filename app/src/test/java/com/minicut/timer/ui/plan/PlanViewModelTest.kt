@@ -2,6 +2,7 @@ package com.minicut.timer.ui.plan
 
 import com.minicut.timer.data.local.entity.MiniCutPlanEntity
 import com.minicut.timer.data.repository.MiniCutRepository
+import com.minicut.timer.domain.model.ActivityLevel
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.testing.FakeCalorieEntryDao
 import com.minicut.timer.testing.FakeDailyConditionCheckDao
@@ -58,13 +59,16 @@ class PlanViewModelTest {
     fun savePlan_andClearAllData_delegateToRepository() = runTest {
         val planDao = FakeMiniCutPlanDao()
         val calorieDao = FakeCalorieEntryDao()
-        val viewModel = PlanViewModel(MiniCutRepository(planDao, calorieDao, FakeDailyConditionCheckDao()))
+        val dailyConditionDao = FakeDailyConditionCheckDao()
+        val viewModel = PlanViewModel(MiniCutRepository(planDao, calorieDao, dailyConditionDao))
 
         viewModel.savePlan(
             startDate = LocalDate.of(2026, 4, 10),
             durationWeeks = 4,
             dailyTargetKcal = 1500,
             goalMode = MiniCutGoalMode.EventReady,
+            activityLevel = ActivityLevel.High,
+            estimatedMaintenanceKcal = 2500,
         )
         advanceUntilIdle()
 
@@ -72,11 +76,14 @@ class PlanViewModelTest {
         assertEquals(LocalDate.of(2026, 5, 7).toEpochDay(), planDao.lastUpsert?.endDateEpochDay)
         assertEquals(1500, planDao.lastUpsert?.dailyTargetKcal)
         assertEquals(MiniCutGoalMode.EventReady.name, planDao.lastUpsert?.goalMode)
+        assertEquals(ActivityLevel.High.name, planDao.lastUpsert?.activityLevel)
+        assertEquals(2500, planDao.lastUpsert?.estimatedMaintenanceKcal)
 
         viewModel.clearAllData()
         advanceUntilIdle()
 
         assertEquals(1, calorieDao.deleteAllCalls)
+        assertEquals(1, dailyConditionDao.deleteAllCalls)
         assertEquals(1, planDao.deletePlanCalls)
         assertNull(planDao.planFlow.value)
     }

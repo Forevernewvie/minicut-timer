@@ -5,8 +5,13 @@ import com.minicut.timer.domain.model.CalorieAdjustmentDirection
 import com.minicut.timer.domain.model.CalorieAdjustmentRecommendation
 import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.DailyCalorieSummary
+import com.minicut.timer.domain.model.DeficitGuardrail
+import com.minicut.timer.domain.model.DeficitRiskLevel
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
+import com.minicut.timer.domain.model.ActivityLevel
+import com.minicut.timer.domain.model.RecoveryRiskAssessment
+import com.minicut.timer.domain.model.RecoveryRiskStatus
 import com.minicut.timer.domain.model.ReverseDietPlan
 import com.minicut.timer.domain.model.ReverseDietStep
 import com.minicut.timer.domain.model.TargetGuidance
@@ -25,6 +30,10 @@ object MiniCutRules {
     const val RECOMMENDED_MAX_KCAL = 1500
     val TARGET_OPTIONS_KCAL = listOf(1000, 1200, 1300, 1400, 1500)
     const val DEFAULT_TARGET_KCAL = 1300
+    private const val HIGH_DEFICIT_PERCENT = 35f
+    private const val CAUTION_DEFICIT_PERCENT = 25f
+    private const val HIGH_DEFICIT_KCAL = 900
+    private const val CAUTION_DEFICIT_KCAL = 700
 
     fun isValidDuration(durationWeeks: Int): Boolean = durationWeeks in MIN_WEEKS..MAX_WEEKS
 
@@ -203,6 +212,105 @@ object MiniCutRules {
     fun recommendedProteinGrams(weightKg: Float?): Int? =
         weightKg?.takeIf { it > 0f }?.let { (it * 2f).roundToInt() }
 
+    fun estimateMaintenanceCalories(
+        bodyWeightKg: Float?,
+        activityLevel: ActivityLevel,
+    ): Int? =
+        bodyWeightKg
+            ?.takeIf { it > 0f }
+            ?.let { (it * activityLevel.kcalPerKgFactor).roundToInt().coerceIn(1400, 4200) }
+
+    fun deficitGuardrail(
+        targetKcal: Int,
+        maintenanceKcal: Int?,
+    ): DeficitGuardrail {
+        val normalizedMaintenance = maintenanceKcal?.takeIf { it > 0 } ?: return DeficitGuardrail()
+        val deficit = (normalizedMaintenance - targetKcal).coerceAtLeast(0)
+        val deficitPercent = if (normalizedMaintenance == 0) 0f else (deficit * 100f / normalizedMaintenance.toFloat())
+        val roundedPercent = (deficitPercent * 10f).roundToInt() / 10f
+
+        return when {
+            deficitPercent >= HIGH_DEFICIT_PERCENT || deficit >= HIGH_DEFICIT_KCAL ->
+                DeficitGuardrail(
+                    maintenanceKcal = normalizedMaintenance,
+                    deficitKcal = deficit,
+                    deficitPercent = roundedPercent,
+                    level = DeficitRiskLevel.High,
+                    title = "결핍 강도가 과도해요",
+                    message = "현재 설정은 유지 대비 ${deficit}kcal(${roundedPercent}%) 결핍으로 추정됩니다. 근손실·피로 리스크를 줄이려면 목표를 높여주세요.",
+                    canSave = false,
+                )
+
+            deficitPercent >= CAUTION_DEFICIT_PERCENT || deficit >= CAUTION_DEFICIT_KCAL ->
+                DeficitGuardrail(
+                    maintenanceKcal = normalizedMaintenance,
+                    deficitKcal = deficit,
+                    deficitPercent = roundedPercent,
+                    level = DeficitRiskLevel.Caution,
+                    title = "결핍 강도 주의 구간",
+                    message = "유지 대비 ${deficit}kcal(${roundedPercent}%) 결핍입니다. 수면·훈련 회복 신호를 더 자주 확인하세요.",
+                    canSave = true,
+                )
+
+            else ->
+                DeficitGuardrail(
+                    maintenanceKcal = normalizedMaintenance,
+                    deficitKcal = deficit,
+                    deficitPercent = roundedPercent,
+                    level = DeficitRiskLevel.Safe,
+                    title = "결핍 강도 안전 구간",
+                    message = "유지 대비 ${deficit}kcal(${roundedPercent}%) 결핍으로 안정적인 범위에 가깝습니다.",
+                    canSave = true,
+                )
+        }
+    }
+
+    fun recoveryRiskAssessment(
+        checks: List<DailyConditionCheck>,
+    ): RecoveryRiskAssessment {
+        val recentChecks = checks.sortedByDescending { it.date }.take(3)
+        if (recentChecks.size < 2) return RecoveryRiskAssessment()
+
+        val dayRiskScores =
+            recentChecks.map { check ->
+                var score = 0
+                if ((check.sleepHours ?: 99f) in 0f..5.99f) score += 1
+                if ((check.fatigueScore ?: 0) >= 4) score += 1
+                if ((check.hungerScore ?: 0) >= 4) score += 1
+                if ((check.moodScore ?: 6) <= 2) score += 1
+                if ((check.workoutPerformanceScore ?: 6) <= 2) score += 1
+                score
+            }
+
+        val flaggedDays = dayRiskScores.count { it > 0 }
+        val highDays = dayRiskScores.count { it >= 2 }
+        return when {
+            highDays >= 2 ->
+                RecoveryRiskAssessment(
+                    status = RecoveryRiskStatus.High,
+                    flaggedDays = flaggedDays,
+                    message = "최근 3일 회복 레드플래그가 반복돼요. 목표 칼로리 완화 또는 3~7일 다이어트 브레이크를 권장합니다.",
+                    suggestDietBreak = true,
+                )
+
+            flaggedDays >= 2 ->
+                RecoveryRiskAssessment(
+                    status = RecoveryRiskStatus.Watch,
+                    flaggedDays = flaggedDays,
+                    message = "회복 신호가 누적되고 있어요. 수면·훈련 강도를 점검하고 감량 강도를 미세 완화해보세요.",
+                    suggestDietBreak = false,
+                )
+
+            else ->
+                RecoveryRiskAssessment(
+                    status = RecoveryRiskStatus.Stable,
+                    flaggedDays = flaggedDays,
+                    message = "최근 회복 신호는 안정적이에요. 현재 루틴을 유지하세요.",
+                    suggestDietBreak = false,
+                )
+        }
+    }
+
     fun weeklyWeightTrend(
         checks: List<DailyConditionCheck>,
     ): WeeklyWeightTrend {
@@ -328,6 +436,42 @@ object MiniCutRules {
                     actionable = delta > 0,
                 )
             }
+        }
+    }
+
+    fun recoveryAwareCalorieAdjustmentRecommendation(
+        currentTargetKcal: Int,
+        weeklyWeightTrend: WeeklyWeightTrend,
+        recoveryRisk: RecoveryRiskAssessment,
+    ): CalorieAdjustmentRecommendation {
+        val baseline =
+            calorieAdjustmentRecommendation(
+                currentTargetKcal = currentTargetKcal,
+                weeklyWeightTrend = weeklyWeightTrend,
+            )
+        if (recoveryRisk.status != RecoveryRiskStatus.High) {
+            return baseline
+        }
+
+        val targetOptions = TARGET_OPTIONS_KCAL.sorted()
+        val higherOption = targetOptions.firstOrNull { it > baseline.currentTargetKcal } ?: baseline.currentTargetKcal
+        val delta = (higherOption - baseline.currentTargetKcal).coerceAtLeast(0)
+        return if (delta > 0) {
+            baseline.copy(
+                suggestedTargetKcal = higherOption,
+                direction = CalorieAdjustmentDirection.Increase,
+                deltaKcal = delta,
+                title = "회복 레드플래그: 목표 완화 권고",
+                message = "최근 회복 신호가 누적되어 ${delta}kcal 상향을 우선 권장합니다. 필요하면 3~7일 다이어트 브레이크를 진행하세요.",
+                actionable = true,
+            )
+        } else {
+            baseline.copy(
+                direction = CalorieAdjustmentDirection.Keep,
+                title = "회복 우선 구간",
+                message = "이미 상단 목표 구간입니다. 이번 주는 추가 하향 없이 회복(수면/피로 관리)을 우선하세요.",
+                actionable = false,
+            )
         }
     }
 }

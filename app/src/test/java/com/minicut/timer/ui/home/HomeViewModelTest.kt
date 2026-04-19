@@ -9,6 +9,7 @@ import com.minicut.timer.domain.model.CalorieAdjustmentDirection
 import com.minicut.timer.domain.model.CalorieRangeStatus
 import com.minicut.timer.domain.model.EntryQuickPreset
 import com.minicut.timer.domain.model.MiniCutPhase
+import com.minicut.timer.domain.model.RecoveryRiskStatus
 import com.minicut.timer.testing.FakeCalorieEntryDao
 import com.minicut.timer.testing.FakeDailyConditionCheckDao
 import com.minicut.timer.testing.FakeMiniCutPlanDao
@@ -293,6 +294,11 @@ class HomeViewModelTest {
             bodyWeightKg = 79.2f,
             proteinGrams = 160,
             resistanceSets = 10,
+            sleepHours = 7.2f,
+            fatigueScore = 2,
+            hungerScore = 3,
+            moodScore = 4,
+            workoutPerformanceScore = 4,
         )
         runCurrent()
 
@@ -300,12 +306,15 @@ class HomeViewModelTest {
         assertEquals(79.2f, dailyConditionDao.lastUpsert?.bodyWeightKg)
         assertEquals(160, dailyConditionDao.lastUpsert?.proteinGrams)
         assertEquals(10, dailyConditionDao.lastUpsert?.resistanceSets)
+        assertEquals(7.2f, dailyConditionDao.lastUpsert?.sleepHours)
+        assertEquals(2, dailyConditionDao.lastUpsert?.fatigueScore)
 
         val state = viewModel.uiState.value
         assertEquals(158, state.recommendedProteinGrams)
         assertTrue((state.weeklyWeightTrend.ratePercentPerWeek ?: 0f) > 0f)
         assertEquals(CalorieAdjustmentDirection.Keep, state.calorieAdjustmentRecommendation.direction)
         assertEquals(1300, state.calorieAdjustmentRecommendation.suggestedTargetKcal)
+        assertEquals(RecoveryRiskStatus.Stable, state.recoveryRiskAssessment.status)
         collectionJob.cancel()
     }
 
@@ -323,6 +332,11 @@ class HomeViewModelTest {
             bodyWeightKg = 0f,
             proteinGrams = 0,
             resistanceSets = 0,
+            sleepHours = 0f,
+            fatigueScore = 0,
+            hungerScore = 0,
+            moodScore = 0,
+            workoutPerformanceScore = 0,
         )
         runCurrent()
 
@@ -417,6 +431,79 @@ class HomeViewModelTest {
             }
         runCurrent()
 
+        val recommendation = viewModel.uiState.value.calorieAdjustmentRecommendation
+        assertEquals(CalorieAdjustmentDirection.Increase, recommendation.direction)
+        assertEquals(1400, recommendation.suggestedTargetKcal)
+        assertTrue(recommendation.actionable)
+        collectionJob.cancel()
+    }
+
+    @Test
+    fun uiState_prioritizesRecoveryRiskAdjustmentWhenRedFlagsAccumulate() = runTest {
+        val today = LocalDate.of(2026, 4, 10)
+        val dailyConditionDao = FakeDailyConditionCheckDao()
+        dailyConditionDao.seedChecks(
+            listOf(
+                DailyConditionCheckEntity(
+                    dateEpochDay = today.minusDays(2).toEpochDay(),
+                    bodyWeightKg = 80f,
+                    proteinGrams = 160,
+                    resistanceSets = 10,
+                    sleepHours = 5.5f,
+                    fatigueScore = 4,
+                    hungerScore = 4,
+                    moodScore = 2,
+                    workoutPerformanceScore = 2,
+                    updatedAtEpochMillis = LocalDateTime.of(2026, 4, 8, 8, 0)
+                        .atZone(ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli(),
+                ),
+                DailyConditionCheckEntity(
+                    dateEpochDay = today.minusDays(1).toEpochDay(),
+                    bodyWeightKg = 79.7f,
+                    proteinGrams = 150,
+                    resistanceSets = 8,
+                    sleepHours = 5.0f,
+                    fatigueScore = 5,
+                    hungerScore = 4,
+                    moodScore = 2,
+                    workoutPerformanceScore = 2,
+                    updatedAtEpochMillis = LocalDateTime.of(2026, 4, 9, 8, 0)
+                        .atZone(ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli(),
+                ),
+                DailyConditionCheckEntity(
+                    dateEpochDay = today.toEpochDay(),
+                    bodyWeightKg = 79.5f,
+                    proteinGrams = 150,
+                    resistanceSets = 8,
+                    sleepHours = 5.2f,
+                    fatigueScore = 4,
+                    hungerScore = 4,
+                    moodScore = 2,
+                    workoutPerformanceScore = 2,
+                    updatedAtEpochMillis = LocalDateTime.of(2026, 4, 10, 8, 0)
+                        .atZone(ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli(),
+                ),
+            ),
+        )
+
+        val viewModel =
+            HomeViewModel(
+                repository = MiniCutRepository(FakeMiniCutPlanDao(), FakeCalorieEntryDao(), dailyConditionDao),
+                dateTickerFlow = flowOf(today),
+            )
+        val collectionJob =
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.uiState.collect()
+            }
+        runCurrent()
+
+        assertEquals(RecoveryRiskStatus.High, viewModel.uiState.value.recoveryRiskAssessment.status)
         val recommendation = viewModel.uiState.value.calorieAdjustmentRecommendation
         assertEquals(CalorieAdjustmentDirection.Increase, recommendation.direction)
         assertEquals(1400, recommendation.suggestedTargetKcal)

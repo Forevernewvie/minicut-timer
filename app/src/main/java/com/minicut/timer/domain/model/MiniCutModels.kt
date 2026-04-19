@@ -9,8 +9,28 @@ data class MiniCutPlan(
     val endDate: LocalDate,
     val dailyTargetKcal: Int,
     val goalMode: MiniCutGoalMode = MiniCutGoalMode.MassReset,
+    val activityLevel: ActivityLevel = ActivityLevel.Moderate,
+    val estimatedMaintenanceKcal: Int = 0,
     val isActive: Boolean = true,
 )
+
+enum class ActivityLevel(
+    val displayName: String,
+    val kcalPerKgFactor: Float,
+) {
+    Low(
+        displayName = "낮음(좌식 위주)",
+        kcalPerKgFactor = 28f,
+    ),
+    Moderate(
+        displayName = "보통(주 3~4회 활동)",
+        kcalPerKgFactor = 31f,
+    ),
+    High(
+        displayName = "높음(주 5회+ 훈련)",
+        kcalPerKgFactor = 34f,
+    ),
+}
 
 enum class MiniCutGoalMode(
     val displayName: String,
@@ -103,6 +123,11 @@ data class DailyConditionCheck(
     val bodyWeightKg: Float? = null,
     val proteinGrams: Int? = null,
     val resistanceSets: Int? = null,
+    val sleepHours: Float? = null,
+    val fatigueScore: Int? = null,
+    val hungerScore: Int? = null,
+    val moodScore: Int? = null,
+    val workoutPerformanceScore: Int? = null,
     val updatedAt: LocalDateTime,
 )
 
@@ -134,4 +159,35 @@ data class CalorieAdjustmentRecommendation(
     val title: String,
     val message: String,
     val actionable: Boolean,
+)
+
+enum class DeficitRiskLevel {
+    Unknown,
+    Safe,
+    Caution,
+    High,
+}
+
+data class DeficitGuardrail(
+    val maintenanceKcal: Int? = null,
+    val deficitKcal: Int? = null,
+    val deficitPercent: Float? = null,
+    val level: DeficitRiskLevel = DeficitRiskLevel.Unknown,
+    val title: String = "유지 칼로리 정보가 더 필요해요",
+    val message: String = "체중과 활동 수준을 입력하면 결핍 강도를 안전 범위로 안내해드릴게요.",
+    val canSave: Boolean = true,
+)
+
+enum class RecoveryRiskStatus {
+    NoData,
+    Stable,
+    Watch,
+    High,
+}
+
+data class RecoveryRiskAssessment(
+    val status: RecoveryRiskStatus = RecoveryRiskStatus.NoData,
+    val flaggedDays: Int = 0,
+    val message: String = "수면·피로·허기 체크가 쌓이면 회복 리스크를 자동 분석해요.",
+    val suggestDietBreak: Boolean = false,
 )

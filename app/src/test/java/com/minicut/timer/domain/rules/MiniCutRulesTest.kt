@@ -4,8 +4,12 @@ import com.minicut.timer.domain.model.CalorieRangeStatus
 import com.minicut.timer.domain.model.CalorieAdjustmentDirection
 import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.DailyCalorieSummary
+import com.minicut.timer.domain.model.DeficitRiskLevel
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
+import com.minicut.timer.domain.model.ActivityLevel
+import com.minicut.timer.domain.model.RecoveryRiskAssessment
+import com.minicut.timer.domain.model.RecoveryRiskStatus
 import com.minicut.timer.domain.model.TargetGuidanceTone
 import com.minicut.timer.domain.model.WeeklyWeightTrend
 import com.minicut.timer.domain.model.WeeklyWeightTrendStatus
@@ -273,5 +277,75 @@ class MiniCutRulesTest {
         assertEquals(CalorieAdjustmentDirection.Keep, recommendation.direction)
         assertEquals(1500, recommendation.suggestedTargetKcal)
         assertEquals(false, recommendation.actionable)
+    }
+
+    @Test
+    fun estimateMaintenanceCalories_andDeficitGuardrail_classifyRiskBands() {
+        val maintenance = MiniCutRules.estimateMaintenanceCalories(bodyWeightKg = 80f, activityLevel = ActivityLevel.Moderate)
+        assertEquals(2480, maintenance)
+
+        val safe = MiniCutRules.deficitGuardrail(targetKcal = 1800, maintenanceKcal = maintenance)
+        assertEquals(DeficitRiskLevel.Caution, safe.level)
+        assertTrue(safe.canSave)
+
+        val high = MiniCutRules.deficitGuardrail(targetKcal = 1200, maintenanceKcal = maintenance)
+        assertEquals(DeficitRiskLevel.High, high.level)
+        assertFalse(high.canSave)
+    }
+
+    @Test
+    fun recoveryRiskAssessment_marksHighWhenSignalsAccumulate() {
+        val checks =
+            listOf(
+                DailyConditionCheck(
+                    date = LocalDate.of(2026, 4, 8),
+                    sleepHours = 5.2f,
+                    fatigueScore = 4,
+                    hungerScore = 4,
+                    moodScore = 2,
+                    workoutPerformanceScore = 2,
+                    updatedAt = LocalDateTime.of(2026, 4, 8, 9, 0),
+                ),
+                DailyConditionCheck(
+                    date = LocalDate.of(2026, 4, 9),
+                    sleepHours = 5.5f,
+                    fatigueScore = 4,
+                    hungerScore = 4,
+                    moodScore = 2,
+                    workoutPerformanceScore = 2,
+                    updatedAt = LocalDateTime.of(2026, 4, 9, 9, 0),
+                ),
+                DailyConditionCheck(
+                    date = LocalDate.of(2026, 4, 10),
+                    sleepHours = 6.0f,
+                    fatigueScore = 4,
+                    hungerScore = 4,
+                    moodScore = 2,
+                    workoutPerformanceScore = 2,
+                    updatedAt = LocalDateTime.of(2026, 4, 10, 9, 0),
+                ),
+            )
+
+        val assessment = MiniCutRules.recoveryRiskAssessment(checks)
+        assertEquals(RecoveryRiskStatus.High, assessment.status)
+        assertTrue(assessment.suggestDietBreak)
+    }
+
+    @Test
+    fun recoveryAwareRecommendation_overridesToIncreaseOnHighRecoveryRisk() {
+        val recommendation =
+            MiniCutRules.recoveryAwareCalorieAdjustmentRecommendation(
+                currentTargetKcal = 1300,
+                weeklyWeightTrend =
+                    WeeklyWeightTrend(
+                        status = WeeklyWeightTrendStatus.TooSlow,
+                        ratePercentPerWeek = 0.3f,
+                    ),
+                recoveryRisk = RecoveryRiskAssessment(status = RecoveryRiskStatus.High, flaggedDays = 3, suggestDietBreak = true),
+            )
+
+        assertEquals(CalorieAdjustmentDirection.Increase, recommendation.direction)
+        assertEquals(1400, recommendation.suggestedTargetKcal)
+        assertTrue(recommendation.actionable)
     }
 }

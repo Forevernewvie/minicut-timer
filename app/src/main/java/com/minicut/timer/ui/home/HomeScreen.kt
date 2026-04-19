@@ -93,6 +93,8 @@ import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.EntryQuickPreset
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
+import com.minicut.timer.domain.model.RecoveryRiskAssessment
+import com.minicut.timer.domain.model.RecoveryRiskStatus
 import com.minicut.timer.domain.model.WeeklyAdherenceReport
 import com.minicut.timer.domain.model.WeeklyWeightTrend
 import com.minicut.timer.domain.model.WeeklyWeightTrendStatus
@@ -121,7 +123,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onOpenPlan: () -> Unit,
+    onOpenPlan: (Int?) -> Unit,
 ) {
     val context = LocalContext.current
     val repository = context.miniCutRepository
@@ -206,7 +208,7 @@ fun HomeScreen(
                 item {
                     val plan = uiState.plan
                     if (plan == null) {
-                        EmptyPlanHero(onOpenPlan = onOpenPlan)
+                        EmptyPlanHero(onOpenPlan = { onOpenPlan(null) })
                     } else {
                         PlanOverviewCard(
                             startDate = plan.startDate.asCompactDate(),
@@ -218,7 +220,7 @@ fun HomeScreen(
                             progress = MiniCutRules.calculateProgress(plan.startDate, plan.endDate, today),
                             remainingDays = MiniCutRules.remainingDays(plan.startDate, plan.endDate, today),
                             daysUntilStart = ChronoUnit.DAYS.between(today, plan.startDate).toInt(),
-                            onOpenPlan = onOpenPlan,
+                            onOpenPlan = { onOpenPlan(null) },
                         )
                     }
                 }
@@ -237,7 +239,7 @@ fun HomeScreen(
                                         maintenanceChecks + step
                                     }
                             },
-                            onOpenPlan = onOpenPlan,
+                            onOpenPlan = { onOpenPlan(null) },
                         )
                     }
                 }
@@ -251,11 +253,21 @@ fun HomeScreen(
                     BodyCompositionCheckCard(
                         todayCheck = uiState.todayConditionCheck,
                         weeklyWeightTrend = uiState.weeklyWeightTrend,
+                        recoveryRiskAssessment = uiState.recoveryRiskAssessment,
                         recommendedProteinGrams = uiState.recommendedProteinGrams,
                         calorieAdjustmentRecommendation = uiState.calorieAdjustmentRecommendation,
-                        onOpenPlan = onOpenPlan,
-                        onSave = { bodyWeightKg, proteinGrams, resistanceSets ->
-                            viewModel.saveDailyConditionCheck(bodyWeightKg, proteinGrams, resistanceSets)
+                        onOpenPlan = { suggestedTargetKcal -> onOpenPlan(suggestedTargetKcal) },
+                        onSave = { bodyWeightKg, proteinGrams, resistanceSets, sleepHours, fatigueScore, hungerScore, moodScore, workoutPerformanceScore ->
+                            viewModel.saveDailyConditionCheck(
+                                bodyWeightKg = bodyWeightKg,
+                                proteinGrams = proteinGrams,
+                                resistanceSets = resistanceSets,
+                                sleepHours = sleepHours,
+                                fatigueScore = fatigueScore,
+                                hungerScore = hungerScore,
+                                moodScore = moodScore,
+                                workoutPerformanceScore = workoutPerformanceScore,
+                            )
                             showMessage("근손실 방어 체크인을 저장했어요")
                         },
                         onInvalidInput = { message ->
@@ -858,10 +870,11 @@ private fun WeeklyReportCard(
 private fun BodyCompositionCheckCard(
     todayCheck: DailyConditionCheck?,
     weeklyWeightTrend: WeeklyWeightTrend,
+    recoveryRiskAssessment: RecoveryRiskAssessment,
     recommendedProteinGrams: Int?,
     calorieAdjustmentRecommendation: CalorieAdjustmentRecommendation,
-    onOpenPlan: () -> Unit,
-    onSave: (Float?, Int?, Int?) -> Unit,
+    onOpenPlan: (Int?) -> Unit,
+    onSave: (Float?, Int?, Int?, Float?, Int?, Int?, Int?, Int?) -> Unit,
     onInvalidInput: (String) -> Unit,
 ) {
     val saveKey = todayCheck?.updatedAt?.toString().orEmpty()
@@ -872,6 +885,11 @@ private fun BodyCompositionCheckCard(
     }
     var proteinText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.proteinGrams?.toString().orEmpty()) }
     var resistanceSetsText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.resistanceSets?.toString().orEmpty()) }
+    var sleepHoursText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.sleepHours?.toString().orEmpty()) }
+    var fatigueScoreText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.fatigueScore?.toString().orEmpty()) }
+    var hungerScoreText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.hungerScore?.toString().orEmpty()) }
+    var moodScoreText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.moodScore?.toString().orEmpty()) }
+    var workoutPerformanceScoreText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.workoutPerformanceScore?.toString().orEmpty()) }
 
     val trendColor =
         when (weeklyWeightTrend.status) {
@@ -882,6 +900,13 @@ private fun BodyCompositionCheckCard(
             WeeklyWeightTrendStatus.GainOrStall -> MaterialTheme.colorScheme.error
         }
     val trendRateText = weeklyWeightTrend.ratePercentPerWeek?.let { "주당 ${String.format("%.2f", it)}%" } ?: "속도 계산 대기"
+    val recoveryAccent =
+        when (recoveryRiskAssessment.status) {
+            RecoveryRiskStatus.NoData -> MaterialTheme.colorScheme.onSurfaceVariant
+            RecoveryRiskStatus.Stable -> MaterialTheme.colorScheme.primary
+            RecoveryRiskStatus.Watch -> MaterialTheme.colorScheme.tertiary
+            RecoveryRiskStatus.High -> MaterialTheme.colorScheme.error
+        }
 
     Card(
         shape = MiniCutCardShape,
@@ -907,6 +932,18 @@ private fun BodyCompositionCheckCard(
                     "$trendRateText · ${weeklyWeightTrend.message}",
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = recoveryAccent.copy(alpha = 0.10f),
+                shape = MiniCutPillShape,
+            ) {
+                Text(
+                    "회복 리스크 · ${recoveryRiskAssessment.message}",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = recoveryAccent,
                 )
             }
             if (recommendedProteinGrams != null) {
@@ -950,7 +987,7 @@ private fun BodyCompositionCheckCard(
                     )
                     if (calorieAdjustmentRecommendation.actionable) {
                         OutlinedButton(
-                            onClick = onOpenPlan,
+                            onClick = { onOpenPlan(calorieAdjustmentRecommendation.suggestedTargetKcal) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text("플랜 화면에서 제안값 확인")
@@ -984,6 +1021,50 @@ private fun BodyCompositionCheckCard(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                 )
             }
+            OutlinedTextField(
+                value = sleepHoursText,
+                onValueChange = { sleepHoursText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("수면 시간(시간, 선택)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = fatigueScoreText,
+                    onValueChange = { fatigueScoreText = it.filter(Char::isDigit) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("피로(1~5)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                )
+                OutlinedTextField(
+                    value = hungerScoreText,
+                    onValueChange = { hungerScoreText = it.filter(Char::isDigit) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("허기(1~5)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = moodScoreText,
+                    onValueChange = { moodScoreText = it.filter(Char::isDigit) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("기분(1~5)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                )
+                OutlinedTextField(
+                    value = workoutPerformanceScoreText,
+                    onValueChange = { workoutPerformanceScoreText = it.filter(Char::isDigit) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("수행감(1~5)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                )
+            }
             Button(
                 onClick = {
                     val validation =
@@ -991,12 +1072,26 @@ private fun BodyCompositionCheckCard(
                             bodyWeightText = bodyWeightText,
                             proteinText = proteinText,
                             resistanceSetsText = resistanceSetsText,
+                            sleepHoursText = sleepHoursText,
+                            fatigueScoreText = fatigueScoreText,
+                            hungerScoreText = hungerScoreText,
+                            moodScoreText = moodScoreText,
+                            workoutPerformanceScoreText = workoutPerformanceScoreText,
                         )
                     if (!validation.isValid) {
                         onInvalidInput(validation.errorMessage ?: "입력값을 확인해주세요.")
                         return@Button
                     }
-                    onSave(validation.bodyWeightKg, validation.proteinGrams, validation.resistanceSets)
+                    onSave(
+                        validation.bodyWeightKg,
+                        validation.proteinGrams,
+                        validation.resistanceSets,
+                        validation.sleepHours,
+                        validation.fatigueScore,
+                        validation.hungerScore,
+                        validation.moodScore,
+                        validation.workoutPerformanceScore,
+                    )
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {

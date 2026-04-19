@@ -11,6 +11,7 @@ import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.EntryQuickPreset
 import com.minicut.timer.domain.model.MiniCutPlan
 import com.minicut.timer.domain.model.MiniCutPhase
+import com.minicut.timer.domain.model.RecoveryRiskAssessment
 import com.minicut.timer.domain.model.WeeklyAdherenceReport
 import com.minicut.timer.domain.model.WeeklyWeightTrend
 import com.minicut.timer.domain.rules.MiniCutRules
@@ -41,11 +42,13 @@ data class HomeUiState(
     val weeklyReport: WeeklyAdherenceReport = WeeklyAdherenceReport(),
     val todayConditionCheck: DailyConditionCheck? = null,
     val weeklyWeightTrend: WeeklyWeightTrend = WeeklyWeightTrend(),
+    val recoveryRiskAssessment: RecoveryRiskAssessment = RecoveryRiskAssessment(),
     val recommendedProteinGrams: Int? = null,
     val calorieAdjustmentRecommendation: CalorieAdjustmentRecommendation =
-        MiniCutRules.calorieAdjustmentRecommendation(
+        MiniCutRules.recoveryAwareCalorieAdjustmentRecommendation(
             currentTargetKcal = MiniCutRules.DEFAULT_TARGET_KCAL,
             weeklyWeightTrend = WeeklyWeightTrend(),
+            recoveryRisk = RecoveryRiskAssessment(),
         ),
 )
 
@@ -139,6 +142,7 @@ class HomeViewModel(
             val target = primaryState.plan?.dailyTargetKcal ?: MiniCutRules.DEFAULT_TARGET_KCAL
             val planPhase = primaryState.plan?.let { MiniCutRules.phaseOf(it.startDate, it.endDate, primaryState.currentDate) }
             val weeklyWeightTrend = MiniCutRules.weeklyWeightTrend(primaryState.weeklyConditionChecks)
+            val recoveryRisk = MiniCutRules.recoveryRiskAssessment(primaryState.weeklyConditionChecks)
             val latestWeight =
                 primaryState.todayConditionCheck?.bodyWeightKg
                     ?: primaryState.weeklyConditionChecks.lastOrNull { (it.bodyWeightKg ?: 0f) > 0f }?.bodyWeightKg
@@ -157,11 +161,13 @@ class HomeViewModel(
                 weeklyReport = MiniCutRules.weeklyAdherenceReport(weeklySummaries, target),
                 todayConditionCheck = primaryState.todayConditionCheck,
                 weeklyWeightTrend = weeklyWeightTrend,
+                recoveryRiskAssessment = recoveryRisk,
                 recommendedProteinGrams = MiniCutRules.recommendedProteinGrams(latestWeight),
                 calorieAdjustmentRecommendation =
-                    MiniCutRules.calorieAdjustmentRecommendation(
+                    MiniCutRules.recoveryAwareCalorieAdjustmentRecommendation(
                         currentTargetKcal = target,
                         weeklyWeightTrend = weeklyWeightTrend,
+                        recoveryRisk = recoveryRisk,
                     ),
             )
         }.stateIn(
@@ -233,6 +239,11 @@ class HomeViewModel(
         bodyWeightKg: Float?,
         proteinGrams: Int?,
         resistanceSets: Int?,
+        sleepHours: Float?,
+        fatigueScore: Int?,
+        hungerScore: Int?,
+        moodScore: Int?,
+        workoutPerformanceScore: Int?,
     ) {
         viewModelScope.launch {
             repository.upsertDailyConditionCheck(
@@ -240,6 +251,11 @@ class HomeViewModel(
                 bodyWeightKg = bodyWeightKg,
                 proteinGrams = proteinGrams,
                 resistanceSets = resistanceSets,
+                sleepHours = sleepHours,
+                fatigueScore = fatigueScore,
+                hungerScore = hungerScore,
+                moodScore = moodScore,
+                workoutPerformanceScore = workoutPerformanceScore,
             )
         }
     }

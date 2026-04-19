@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -24,6 +25,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,9 +47,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.minicut.timer.domain.model.ActivityLevel
+import com.minicut.timer.domain.model.DeficitGuardrail
+import com.minicut.timer.domain.model.DeficitRiskLevel
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.TargetGuidance
 import com.minicut.timer.domain.model.TargetGuidanceTone
@@ -56,6 +62,7 @@ import com.minicut.timer.ui.components.MiniCutBackdrop
 import com.minicut.timer.ui.components.MiniCutCardShape
 import com.minicut.timer.ui.components.MiniCutInlineFeedback
 import com.minicut.timer.ui.components.MiniCutInlineFeedbackTone
+import com.minicut.timer.ui.components.MiniCutPanelShape
 import com.minicut.timer.ui.components.MiniCutPillShape
 import com.minicut.timer.ui.components.MiniCutSectionHeader
 import com.minicut.timer.ui.util.asCompactDate
@@ -67,6 +74,7 @@ import java.time.LocalDate
 @Composable
 fun PlanScreen(
     onSaved: () -> Unit,
+    suggestedTargetKcal: Int? = null,
 ) {
     val context = LocalContext.current
     val repository = context.miniCutRepository
@@ -77,6 +85,8 @@ fun PlanScreen(
     var durationWeeks by rememberSaveable { mutableIntStateOf(4) }
     var dailyTargetKcal by rememberSaveable { mutableIntStateOf(MiniCutRules.DEFAULT_TARGET_KCAL) }
     var goalMode by rememberSaveable { mutableStateOf(MiniCutGoalMode.MassReset) }
+    var activityLevel by rememberSaveable { mutableStateOf(ActivityLevel.Moderate) }
+    var bodyWeightText by rememberSaveable { mutableStateOf("") }
     var acknowledgeNotStrengthPeak by rememberSaveable { mutableStateOf(false) }
     var acknowledgeNotLongTermDiet by rememberSaveable { mutableStateOf(false) }
     var acknowledgeNotMassGainAvoidance by rememberSaveable { mutableStateOf(false) }
@@ -90,6 +100,14 @@ fun PlanScreen(
             durationWeeks = it.durationWeeks
             dailyTargetKcal = it.dailyTargetKcal
             goalMode = it.goalMode
+            activityLevel = it.activityLevel
+            bodyWeightText =
+                if (it.estimatedMaintenanceKcal > 0) {
+                    val estimatedWeight = it.estimatedMaintenanceKcal / it.activityLevel.kcalPerKgFactor
+                    String.format(java.util.Locale.US, "%.1f", estimatedWeight)
+                } else {
+                    ""
+                }
             acknowledgeNotStrengthPeak = true
             acknowledgeNotLongTermDiet = true
             acknowledgeNotMassGainAvoidance = true
@@ -98,9 +116,20 @@ fun PlanScreen(
             durationWeeks = 4
             dailyTargetKcal = MiniCutRules.DEFAULT_TARGET_KCAL
             goalMode = MiniCutGoalMode.MassReset
+            activityLevel = ActivityLevel.Moderate
+            bodyWeightText = ""
             acknowledgeNotStrengthPeak = false
             acknowledgeNotLongTermDiet = false
             acknowledgeNotMassGainAvoidance = false
+        }
+    }
+
+    LaunchedEffect(suggestedTargetKcal) {
+        val suggestion = suggestedTargetKcal?.takeIf { it in MiniCutRules.TARGET_OPTIONS_KCAL } ?: return@LaunchedEffect
+        if (dailyTargetKcal != suggestion) {
+            dailyTargetKcal = suggestion
+            inlineFeedbackTone = MiniCutInlineFeedbackTone.Info
+            inlineFeedbackMessage = "홈에서 제안한 ${suggestion.asKcal()}을 적용했어요. 저장하면 플랜에 반영됩니다."
         }
     }
 
@@ -113,15 +142,38 @@ fun PlanScreen(
     }
     val dialogButtonColor = MaterialTheme.colorScheme.primary.toArgb()
     val hasExistingPlan = existingPlan != null
-    val hasPlanChanges = remember(existingPlan, startDate, durationWeeks, dailyTargetKcal, goalMode) {
+    val bodyWeightKg = bodyWeightText.toFloatOrNull()?.takeIf { it > 0f }
+    val estimatedMaintenanceKcal =
+        MiniCutRules.estimateMaintenanceCalories(
+            bodyWeightKg = bodyWeightKg,
+            activityLevel = activityLevel,
+        ) ?: existingPlan?.estimatedMaintenanceKcal?.takeIf { it > 0 }
+    val deficitGuardrail = remember(dailyTargetKcal, estimatedMaintenanceKcal) {
+        MiniCutRules.deficitGuardrail(
+            targetKcal = dailyTargetKcal,
+            maintenanceKcal = estimatedMaintenanceKcal,
+        )
+    }
+    val hasPlanChanges = remember(
+        existingPlan,
+        startDate,
+        durationWeeks,
+        dailyTargetKcal,
+        goalMode,
+        activityLevel,
+        estimatedMaintenanceKcal,
+    ) {
         existingPlan?.let {
             it.startDate != startDate ||
                 it.durationWeeks != durationWeeks ||
                 it.dailyTargetKcal != dailyTargetKcal ||
-                it.goalMode != goalMode
+                it.goalMode != goalMode ||
+                it.activityLevel != activityLevel ||
+                it.estimatedMaintenanceKcal != (estimatedMaintenanceKcal ?: 0)
         } ?: true
     }
     val isSuitabilityConfirmed = acknowledgeNotStrengthPeak && acknowledgeNotLongTermDiet && acknowledgeNotMassGainAvoidance
+    val canSavePlan = hasPlanChanges && isSuitabilityConfirmed && deficitGuardrail.canSave
 
     if (showDataResetDialog) {
         AlertDialog(
@@ -167,10 +219,18 @@ fun PlanScreen(
             bottomBar = {
                 SavePlanBar(
                     buttonLabel = if (hasExistingPlan) "플랜 다시 저장" else "플랜 저장하고 시작하기",
-                    enabled = hasPlanChanges && isSuitabilityConfirmed,
+                    enabled = canSavePlan,
                     suitabilityConfirmed = isSuitabilityConfirmed,
+                    deficitGuardrail = deficitGuardrail,
                     onSave = {
-                        viewModel.savePlan(startDate, durationWeeks, dailyTargetKcal, goalMode)
+                        viewModel.savePlan(
+                            startDate = startDate,
+                            durationWeeks = durationWeeks,
+                            dailyTargetKcal = dailyTargetKcal,
+                            goalMode = goalMode,
+                            activityLevel = activityLevel,
+                            estimatedMaintenanceKcal = estimatedMaintenanceKcal ?: 0,
+                        )
                         inlineFeedbackTone = MiniCutInlineFeedbackTone.Info
                         inlineFeedbackMessage = "플랜을 저장했어요. 목적에 맞는 안내와 종료 후 유지 가이드가 함께 반영됩니다."
                         onSaved()
@@ -210,6 +270,8 @@ fun PlanScreen(
                         durationWeeks = durationWeeks,
                         dailyTargetKcal = dailyTargetKcal,
                         goalMode = goalMode,
+                        activityLevel = activityLevel,
+                        estimatedMaintenanceKcal = estimatedMaintenanceKcal,
                     )
                 }
                 item {
@@ -337,6 +399,40 @@ fun PlanScreen(
                                 tone = MiniCutInlineFeedbackTone.Caution,
                             )
                         }
+                    }
+                }
+                item {
+                    StepCard(
+                        step = "6",
+                        title = "결핍 강도 가드레일",
+                        description = "체중과 활동 수준으로 유지칼로리를 추정해 현재 목표의 안전 범위를 점검합니다.",
+                    ) {
+                        SelectionChips {
+                            ActivityLevel.entries.forEach { level ->
+                                FilterChip(
+                                    selected = activityLevel == level,
+                                    onClick = { activityLevel = level },
+                                    modifier = Modifier.semantics {
+                                        selected = activityLevel == level
+                                        contentDescription = "${level.displayName} ${if (activityLevel == level) "선택됨" else "선택 안 됨"}"
+                                    },
+                                    label = { Text(level.displayName) },
+                                )
+                            }
+                        }
+                        OutlinedTextField(
+                            value = bodyWeightText,
+                            onValueChange = { bodyWeightText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("현재 체중(kg, 선택)") },
+                            placeholder = { Text("예: 78.4") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        )
+                        if (estimatedMaintenanceKcal != null) {
+                            SupportingText("추정 유지칼로리: ${estimatedMaintenanceKcal.asKcal()} (${activityLevel.displayName})")
+                        }
+                        DeficitGuardrailCard(guardrail = deficitGuardrail)
                     }
                 }
                 item {
@@ -505,6 +601,8 @@ private fun PlanSummaryCard(
     durationWeeks: Int,
     dailyTargetKcal: Int,
     goalMode: MiniCutGoalMode,
+    activityLevel: ActivityLevel,
+    estimatedMaintenanceKcal: Int?,
 ) {
     Card(
         shape = MiniCutCardShape,
@@ -531,6 +629,10 @@ private fun PlanSummaryCard(
             SummaryRow(label = "시작일", value = startDate.asCompactDate())
             SummaryRow(label = "종료일", value = endDate.asCompactDate())
             SummaryRow(label = "플랜 목적", value = goalMode.displayName)
+            SummaryRow(label = "활동 수준", value = activityLevel.displayName)
+            if (estimatedMaintenanceKcal != null) {
+                SummaryRow(label = "추정 유지", value = estimatedMaintenanceKcal.asKcal())
+            }
             SummaryRow(label = "하루 목표", value = dailyTargetKcal.asKcal())
         }
     }
@@ -637,6 +739,51 @@ private fun SupportingText(text: String) {
 }
 
 @Composable
+private fun DeficitGuardrailCard(guardrail: DeficitGuardrail) {
+    val accent =
+        when (guardrail.level) {
+            DeficitRiskLevel.Safe -> MaterialTheme.colorScheme.primary
+            DeficitRiskLevel.Caution -> MaterialTheme.colorScheme.tertiary
+            DeficitRiskLevel.High -> MaterialTheme.colorScheme.error
+            DeficitRiskLevel.Unknown -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MiniCutPanelShape,
+        color = accent.copy(alpha = 0.10f),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.24f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                guardrail.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = accent,
+                fontWeight = FontWeight.Bold,
+            )
+            guardrail.maintenanceKcal?.let { maintenance ->
+                val deficitText =
+                    guardrail.deficitKcal?.let { "${it.asKcal()} / ${guardrail.deficitPercent ?: 0f}%" }
+                        ?: "계산 대기"
+                Text(
+                    "유지 ${maintenance.asKcal()} · 결핍 ${deficitText}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Text(
+                guardrail.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
 private fun SummaryRow(
     label: String,
     value: String,
@@ -656,6 +803,7 @@ private fun SavePlanBar(
     buttonLabel: String,
     enabled: Boolean,
     suitabilityConfirmed: Boolean,
+    deficitGuardrail: DeficitGuardrail,
     onSave: () -> Unit,
 ) {
     Surface(shadowElevation = 8.dp, tonalElevation = 2.dp) {
@@ -677,6 +825,7 @@ private fun SavePlanBar(
                 text =
                     when {
                         !suitabilityConfirmed -> "사전 적합성 점검 3개 항목을 모두 체크하면 저장할 수 있어요."
+                        !deficitGuardrail.canSave -> "결핍 강도가 높아 저장이 잠겨 있어요. 목표를 상향하거나 유지칼로리를 다시 확인하세요."
                         enabled -> "저장 후 바로 오늘 기록에서 같은 기준을 사용합니다."
                         else -> "현재 설정은 이미 저장된 플랜과 동일합니다."
                     },

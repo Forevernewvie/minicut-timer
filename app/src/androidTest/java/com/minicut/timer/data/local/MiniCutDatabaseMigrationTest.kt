@@ -80,7 +80,88 @@ class MiniCutDatabaseMigrationTest {
     }
 
     @Test
-    fun migrate4To6_addsGoalModeAndPreservesExistingPlanRow() {
+    fun migrate6To7_addsGuardrailAndRecoveryColumns() {
+        helper.createDatabase(testDbName, 6).apply {
+            execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `mini_cut_plan` (
+                    `id` INTEGER NOT NULL,
+                    `startDateEpochDay` INTEGER NOT NULL,
+                    `durationWeeks` INTEGER NOT NULL,
+                    `endDateEpochDay` INTEGER NOT NULL,
+                    `dailyTargetKcal` INTEGER NOT NULL,
+                    `goalMode` TEXT NOT NULL,
+                    `isActive` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `calorie_entries` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `dateEpochDay` INTEGER NOT NULL,
+                    `calories` INTEGER NOT NULL,
+                    `foodName` TEXT NOT NULL,
+                    `note` TEXT NOT NULL,
+                    `timeLabel` TEXT NOT NULL,
+                    `isFavorite` INTEGER NOT NULL,
+                    `createdAtEpochMillis` INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `daily_condition_checks` (
+                    `dateEpochDay` INTEGER NOT NULL,
+                    `bodyWeightKg` REAL,
+                    `proteinGrams` INTEGER,
+                    `resistanceSets` INTEGER,
+                    `updatedAtEpochMillis` INTEGER NOT NULL,
+                    PRIMARY KEY(`dateEpochDay`)
+                )
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                INSERT INTO mini_cut_plan(id, startDateEpochDay, durationWeeks, endDateEpochDay, dailyTargetKcal, goalMode, isActive)
+                VALUES(1, 1000, 4, 1027, 1300, 'MassReset', 1)
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            testDbName,
+            7,
+            true,
+            MiniCutDatabase.MIGRATION_6_7,
+        ).apply {
+            query("PRAGMA table_info('mini_cut_plan')").use { cursor ->
+                val columns = mutableSetOf<String>()
+                while (cursor.moveToNext()) {
+                    columns += cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                }
+                assertTrue(columns.contains("activityLevel"))
+                assertTrue(columns.contains("estimatedMaintenanceKcal"))
+            }
+            query("PRAGMA table_info('daily_condition_checks')").use { cursor ->
+                val columns = mutableSetOf<String>()
+                while (cursor.moveToNext()) {
+                    columns += cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                }
+                assertTrue(columns.contains("sleepHours"))
+                assertTrue(columns.contains("fatigueScore"))
+                assertTrue(columns.contains("hungerScore"))
+                assertTrue(columns.contains("moodScore"))
+                assertTrue(columns.contains("workoutPerformanceScore"))
+            }
+            close()
+        }
+    }
+
+    @Test
+    fun migrate4To7_preservesPlanRowAndAppliesDefaultsForNewColumns() {
         helper.createDatabase(testDbName, 4).apply {
             execSQL(
                 """
@@ -120,16 +201,21 @@ class MiniCutDatabaseMigrationTest {
 
         helper.runMigrationsAndValidate(
             testDbName,
-            6,
+            7,
             true,
             MiniCutDatabase.MIGRATION_4_5,
             MiniCutDatabase.MIGRATION_5_6,
+            MiniCutDatabase.MIGRATION_6_7,
         ).apply {
-            query("SELECT goalMode, dailyTargetKcal FROM mini_cut_plan WHERE id = 1").use { cursor ->
+            query("SELECT goalMode, activityLevel, estimatedMaintenanceKcal, dailyTargetKcal FROM mini_cut_plan WHERE id = 1").use { cursor ->
                 assertTrue(cursor.moveToFirst())
                 val goalMode = cursor.getString(cursor.getColumnIndexOrThrow("goalMode"))
+                val activityLevel = cursor.getString(cursor.getColumnIndexOrThrow("activityLevel"))
+                val estimatedMaintenanceKcal = cursor.getInt(cursor.getColumnIndexOrThrow("estimatedMaintenanceKcal"))
                 val dailyTarget = cursor.getInt(cursor.getColumnIndexOrThrow("dailyTargetKcal"))
                 assertEquals("MassReset", goalMode)
+                assertEquals("Moderate", activityLevel)
+                assertEquals(0, estimatedMaintenanceKcal)
                 assertEquals(1300, dailyTarget)
             }
             close()

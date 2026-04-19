@@ -2,6 +2,7 @@ package com.minicut.timer.data.local.entity
 
 import com.minicut.timer.data.local.query.DailyCalorieSummaryRow
 import com.minicut.timer.data.local.query.toDomain
+import com.minicut.timer.domain.model.ActivityLevel
 import com.minicut.timer.domain.model.CalorieEntry
 import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.MiniCutGoalMode
@@ -23,6 +24,8 @@ class EntityMapperTest {
                 endDate = LocalDate.of(2026, 5, 7),
                 dailyTargetKcal = 1300,
                 goalMode = MiniCutGoalMode.EventReady,
+                activityLevel = ActivityLevel.High,
+                estimatedMaintenanceKcal = 2500,
                 isActive = true,
             )
 
@@ -34,6 +37,8 @@ class EntityMapperTest {
         assertEquals(domain.endDate, mappedBack.endDate)
         assertEquals(domain.dailyTargetKcal, mappedBack.dailyTargetKcal)
         assertEquals(domain.goalMode, mappedBack.goalMode)
+        assertEquals(domain.activityLevel, mappedBack.activityLevel)
+        assertEquals(domain.estimatedMaintenanceKcal, mappedBack.estimatedMaintenanceKcal)
         assertEquals(domain.isActive, mappedBack.isActive)
     }
 
@@ -87,6 +92,11 @@ class EntityMapperTest {
                 bodyWeightKg = 78.6f,
                 proteinGrams = 160,
                 resistanceSets = 12,
+                sleepHours = 7.5f,
+                fatigueScore = 2,
+                hungerScore = 3,
+                moodScore = 4,
+                workoutPerformanceScore = 4,
                 updatedAt = LocalDateTime.of(2026, 4, 10, 20, 30),
             )
 
@@ -97,5 +107,10 @@ class EntityMapperTest {
         assertEquals(domain.bodyWeightKg, mappedBack.bodyWeightKg)
         assertEquals(domain.proteinGrams, mappedBack.proteinGrams)
         assertEquals(domain.resistanceSets, mappedBack.resistanceSets)
+        assertEquals(domain.sleepHours, mappedBack.sleepHours)
+        assertEquals(domain.fatigueScore, mappedBack.fatigueScore)
+        assertEquals(domain.hungerScore, mappedBack.hungerScore)
+        assertEquals(domain.moodScore, mappedBack.moodScore)
+        assertEquals(domain.workoutPerformanceScore, mappedBack.workoutPerformanceScore)
     }
 }
