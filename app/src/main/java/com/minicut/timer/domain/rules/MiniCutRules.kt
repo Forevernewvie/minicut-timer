@@ -10,6 +10,9 @@ import com.minicut.timer.domain.model.DeficitRiskLevel
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
 import com.minicut.timer.domain.model.ActivityLevel
+import com.minicut.timer.domain.model.DietBreakRecommendation
+import com.minicut.timer.domain.model.LeanMassProtectionGrade
+import com.minicut.timer.domain.model.LeanMassProtectionScore
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
 import com.minicut.timer.domain.model.RecoveryRiskStatus
 import com.minicut.timer.domain.model.ReverseDietPlan
@@ -473,5 +476,93 @@ object MiniCutRules {
                 actionable = false,
             )
         }
+    }
+
+    fun leanMassProtectionScore(
+        checks: List<DailyConditionCheck>,
+        recommendedProteinGrams: Int?,
+        recoveryRisk: RecoveryRiskAssessment,
+    ): LeanMassProtectionScore {
+        val recent = checks.sortedByDescending { it.date }.take(7)
+        if (recent.size < 2) return LeanMassProtectionScore()
+
+        val proteinHitDays =
+            recent.count { check ->
+                val protein = check.proteinGrams ?: 0
+                val recommended = recommendedProteinGrams ?: 0
+                recommended > 0 && protein >= recommended
+            }
+        val resistanceHitDays = recent.count { (it.resistanceSets ?: 0) >= 8 }
+        val checkinDays = recent.count { check ->
+            (check.proteinGrams ?: 0) > 0 || (check.resistanceSets ?: 0) > 0 || (check.bodyWeightKg ?: 0f) > 0f
+        }
+
+        val proteinScore = (proteinHitDays * 10).coerceAtMost(50)
+        val resistanceScore = (resistanceHitDays * 10).coerceAtMost(30)
+        val consistencyScore = (checkinDays * 3).coerceAtMost(20)
+        val penalty =
+            when (recoveryRisk.status) {
+                RecoveryRiskStatus.High -> 20
+                RecoveryRiskStatus.Watch -> 10
+                else -> 0
+            }
+        val score = (proteinScore + resistanceScore + consistencyScore - penalty).coerceIn(0, 100)
+
+        val grade =
+            when {
+                score >= 80 -> LeanMassProtectionGrade.Excellent
+                score >= 65 -> LeanMassProtectionGrade.Good
+                score >= 45 -> LeanMassProtectionGrade.Moderate
+                else -> LeanMassProtectionGrade.Low
+            }
+        val message =
+            when (grade) {
+                LeanMassProtectionGrade.Excellent -> "근손실 방어 루틴이 매우 안정적이에요. 현재 패턴을 유지하세요."
+                LeanMassProtectionGrade.Good -> "근손실 방어가 잘 되고 있어요. 단백질/훈련 한두 날만 더 보강하면 더 좋아집니다."
+                LeanMassProtectionGrade.Moderate -> "기본 루틴은 유지 중이지만 단백질 또는 훈련 달성률 보강이 필요해요."
+                LeanMassProtectionGrade.Low -> "근손실 방어 지표가 약해요. 단백질·저항운동·회복 신호를 우선 개선하세요."
+                LeanMassProtectionGrade.NoData -> "단백질/훈련 체크가 쌓이면 근손실 방어 점수를 계산해요."
+            }
+
+        return LeanMassProtectionScore(
+            score = score,
+            grade = grade,
+            message = message,
+            proteinHitDays = proteinHitDays,
+            resistanceHitDays = resistanceHitDays,
+        )
+    }
+
+    fun dietBreakRecommendation(
+        phase: MiniCutPhase?,
+        recoveryRisk: RecoveryRiskAssessment,
+        weeklyWeightTrend: WeeklyWeightTrend,
+    ): DietBreakRecommendation {
+        if (phase != MiniCutPhase.Active) return DietBreakRecommendation()
+
+        if (recoveryRisk.status == RecoveryRiskStatus.High) {
+            return DietBreakRecommendation(
+                shouldSuggest = true,
+                suggestedDays = 5,
+                title = "5일 다이어트 브레이크 권장",
+                message = "회복 레드플래그가 누적되었습니다. 3~7일 유지칼로리 구간으로 전환 후 감량을 재개하세요.",
+            )
+        }
+
+        if (weeklyWeightTrend.status == WeeklyWeightTrendStatus.TooFast && recoveryRisk.status == RecoveryRiskStatus.Watch) {
+            return DietBreakRecommendation(
+                shouldSuggest = true,
+                suggestedDays = 3,
+                title = "3일 미니 브레이크 권장",
+                message = "감량 속도 과속 + 회복 경고가 함께 보여 짧은 유지구간으로 피로를 완화하는 것이 좋습니다.",
+            )
+        }
+
+        return DietBreakRecommendation(
+            shouldSuggest = false,
+            suggestedDays = 0,
+            title = "브레이크 불필요",
+            message = "현재는 감량 리듬이 안정적입니다. 체크인을 유지하며 진행하세요.",
+        )
     }
 }

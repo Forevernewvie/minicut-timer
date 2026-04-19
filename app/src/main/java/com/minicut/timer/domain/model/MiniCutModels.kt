@@ -191,3 +191,26 @@ data class RecoveryRiskAssessment(
     val message: String = "수면·피로·허기 체크가 쌓이면 회복 리스크를 자동 분석해요.",
     val suggestDietBreak: Boolean = false,
 )
+
+enum class LeanMassProtectionGrade {
+    NoData,
+    Low,
+    Moderate,
+    Good,
+    Excellent,
+}
+
+data class LeanMassProtectionScore(
+    val score: Int = 0,
+    val grade: LeanMassProtectionGrade = LeanMassProtectionGrade.NoData,
+    val message: String = "단백질/훈련 체크가 쌓이면 근손실 방어 점수를 계산해요.",
+    val proteinHitDays: Int = 0,
+    val resistanceHitDays: Int = 0,
+)
+
+data class DietBreakRecommendation(
+    val shouldSuggest: Boolean = false,
+    val suggestedDays: Int = 0,
+    val title: String = "다이어트 브레이크 불필요",
+    val message: String = "현재는 계획한 감량 리듬을 유지해도 괜찮아요.",
+)

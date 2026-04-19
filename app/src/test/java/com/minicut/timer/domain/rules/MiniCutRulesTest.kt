@@ -8,6 +8,7 @@ import com.minicut.timer.domain.model.DeficitRiskLevel
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
 import com.minicut.timer.domain.model.ActivityLevel
+import com.minicut.timer.domain.model.LeanMassProtectionGrade
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
 import com.minicut.timer.domain.model.RecoveryRiskStatus
 import com.minicut.timer.domain.model.TargetGuidanceTone
@@ -347,5 +348,55 @@ class MiniCutRulesTest {
         assertEquals(CalorieAdjustmentDirection.Increase, recommendation.direction)
         assertEquals(1400, recommendation.suggestedTargetKcal)
         assertTrue(recommendation.actionable)
+    }
+
+    @Test
+    fun leanMassProtectionScore_reflectsProteinResistanceAndRecoveryPenalty() {
+        val checks =
+            listOf(
+                DailyConditionCheck(
+                    date = LocalDate.of(2026, 4, 8),
+                    proteinGrams = 170,
+                    resistanceSets = 10,
+                    updatedAt = LocalDateTime.of(2026, 4, 8, 9, 0),
+                ),
+                DailyConditionCheck(
+                    date = LocalDate.of(2026, 4, 9),
+                    proteinGrams = 165,
+                    resistanceSets = 9,
+                    updatedAt = LocalDateTime.of(2026, 4, 9, 9, 0),
+                ),
+                DailyConditionCheck(
+                    date = LocalDate.of(2026, 4, 10),
+                    proteinGrams = 160,
+                    resistanceSets = 8,
+                    updatedAt = LocalDateTime.of(2026, 4, 10, 9, 0),
+                ),
+            )
+
+        val score =
+            MiniCutRules.leanMassProtectionScore(
+                checks = checks,
+                recommendedProteinGrams = 160,
+                recoveryRisk = RecoveryRiskAssessment(status = RecoveryRiskStatus.Stable),
+            )
+
+        assertTrue(score.score > 0)
+        assertEquals(3, score.proteinHitDays)
+        assertEquals(3, score.resistanceHitDays)
+        assertTrue(score.grade == LeanMassProtectionGrade.Moderate || score.grade == LeanMassProtectionGrade.Good || score.grade == LeanMassProtectionGrade.Excellent)
+    }
+
+    @Test
+    fun dietBreakRecommendation_suggestsBreakWhenRecoveryRiskHighDuringActivePhase() {
+        val recommendation =
+            MiniCutRules.dietBreakRecommendation(
+                phase = MiniCutPhase.Active,
+                recoveryRisk = RecoveryRiskAssessment(status = RecoveryRiskStatus.High, flaggedDays = 3, suggestDietBreak = true),
+                weeklyWeightTrend = WeeklyWeightTrend(status = WeeklyWeightTrendStatus.TooSlow, ratePercentPerWeek = 0.3f),
+            )
+
+        assertTrue(recommendation.shouldSuggest)
+        assertEquals(5, recommendation.suggestedDays)
     }
 }

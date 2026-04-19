@@ -280,9 +280,18 @@ class HomeViewModelTest {
                 ),
             ),
         )
+        val planDao = FakeMiniCutPlanDao()
+        planDao.planFlow.value =
+            MiniCutPlanEntity(
+                startDateEpochDay = today.minusDays(5).toEpochDay(),
+                durationWeeks = 4,
+                endDateEpochDay = today.plusDays(20).toEpochDay(),
+                dailyTargetKcal = 1300,
+                isActive = true,
+            )
         val viewModel =
             HomeViewModel(
-                repository = MiniCutRepository(FakeMiniCutPlanDao(), FakeCalorieEntryDao(), dailyConditionDao),
+                repository = MiniCutRepository(planDao, FakeCalorieEntryDao(), dailyConditionDao),
                 dateTickerFlow = flowOf(today),
             )
         val collectionJob =
@@ -322,9 +331,18 @@ class HomeViewModelTest {
     fun saveDailyConditionCheck_withZeroOnlyValues_doesNotPersist() = runTest {
         val today = LocalDate.of(2026, 4, 10)
         val dailyConditionDao = FakeDailyConditionCheckDao()
+        val planDao = FakeMiniCutPlanDao()
+        planDao.planFlow.value =
+            MiniCutPlanEntity(
+                startDateEpochDay = today.minusDays(5).toEpochDay(),
+                durationWeeks = 4,
+                endDateEpochDay = today.plusDays(20).toEpochDay(),
+                dailyTargetKcal = 1300,
+                isActive = true,
+            )
         val viewModel =
             HomeViewModel(
-                repository = MiniCutRepository(FakeMiniCutPlanDao(), FakeCalorieEntryDao(), dailyConditionDao),
+                repository = MiniCutRepository(planDao, FakeCalorieEntryDao(), dailyConditionDao),
                 dateTickerFlow = flowOf(today),
             )
 
@@ -373,9 +391,18 @@ class HomeViewModelTest {
             ),
         )
 
+        val planDao = FakeMiniCutPlanDao()
+        planDao.planFlow.value =
+            MiniCutPlanEntity(
+                startDateEpochDay = today.minusDays(5).toEpochDay(),
+                durationWeeks = 4,
+                endDateEpochDay = today.plusDays(20).toEpochDay(),
+                dailyTargetKcal = 1300,
+                isActive = true,
+            )
         val viewModel =
             HomeViewModel(
-                repository = MiniCutRepository(FakeMiniCutPlanDao(), FakeCalorieEntryDao(), dailyConditionDao),
+                repository = MiniCutRepository(planDao, FakeCalorieEntryDao(), dailyConditionDao),
                 dateTickerFlow = flowOf(today),
             )
         val collectionJob =
@@ -420,9 +447,18 @@ class HomeViewModelTest {
             ),
         )
 
+        val planDao = FakeMiniCutPlanDao()
+        planDao.planFlow.value =
+            MiniCutPlanEntity(
+                startDateEpochDay = today.minusDays(5).toEpochDay(),
+                durationWeeks = 4,
+                endDateEpochDay = today.plusDays(20).toEpochDay(),
+                dailyTargetKcal = 1300,
+                isActive = true,
+            )
         val viewModel =
             HomeViewModel(
-                repository = MiniCutRepository(FakeMiniCutPlanDao(), FakeCalorieEntryDao(), dailyConditionDao),
+                repository = MiniCutRepository(planDao, FakeCalorieEntryDao(), dailyConditionDao),
                 dateTickerFlow = flowOf(today),
             )
         val collectionJob =
@@ -492,9 +528,18 @@ class HomeViewModelTest {
             ),
         )
 
+        val planDao = FakeMiniCutPlanDao()
+        planDao.planFlow.value =
+            MiniCutPlanEntity(
+                startDateEpochDay = today.minusDays(5).toEpochDay(),
+                durationWeeks = 4,
+                endDateEpochDay = today.plusDays(20).toEpochDay(),
+                dailyTargetKcal = 1300,
+                isActive = true,
+            )
         val viewModel =
             HomeViewModel(
-                repository = MiniCutRepository(FakeMiniCutPlanDao(), FakeCalorieEntryDao(), dailyConditionDao),
+                repository = MiniCutRepository(planDao, FakeCalorieEntryDao(), dailyConditionDao),
                 dateTickerFlow = flowOf(today),
             )
         val collectionJob =
@@ -508,6 +553,8 @@ class HomeViewModelTest {
         assertEquals(CalorieAdjustmentDirection.Increase, recommendation.direction)
         assertEquals(1400, recommendation.suggestedTargetKcal)
         assertTrue(recommendation.actionable)
+        assertTrue(viewModel.uiState.value.dietBreakRecommendation.shouldSuggest)
+        assertEquals(5, viewModel.uiState.value.dietBreakRecommendation.suggestedDays)
         collectionJob.cancel()
     }
 }

@@ -90,7 +90,10 @@ import com.minicut.timer.domain.model.CalorieAdjustmentDirection
 import com.minicut.timer.domain.model.CalorieAdjustmentRecommendation
 import com.minicut.timer.domain.model.CalorieRangeStatus
 import com.minicut.timer.domain.model.DailyConditionCheck
+import com.minicut.timer.domain.model.DietBreakRecommendation
 import com.minicut.timer.domain.model.EntryQuickPreset
+import com.minicut.timer.domain.model.LeanMassProtectionGrade
+import com.minicut.timer.domain.model.LeanMassProtectionScore
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
@@ -273,6 +276,13 @@ fun HomeScreen(
                         onInvalidInput = { message ->
                             showMessage(message)
                         },
+                    )
+                }
+                item {
+                    LeanMassProtectionCard(
+                        score = uiState.leanMassProtectionScore,
+                        dietBreakRecommendation = uiState.dietBreakRecommendation,
+                        onOpenPlan = { onOpenPlan(null) },
                     )
                 }
                 item {
@@ -862,6 +872,81 @@ private fun WeeklyReportCard(
                 color = MaterialTheme.colorScheme.primary,
             )
             Text(report.focusMessage, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun LeanMassProtectionCard(
+    score: LeanMassProtectionScore,
+    dietBreakRecommendation: DietBreakRecommendation,
+    onOpenPlan: () -> Unit,
+) {
+    val accent =
+        when (score.grade) {
+            LeanMassProtectionGrade.Excellent -> MaterialTheme.colorScheme.primary
+            LeanMassProtectionGrade.Good -> MaterialTheme.colorScheme.primary
+            LeanMassProtectionGrade.Moderate -> MaterialTheme.colorScheme.tertiary
+            LeanMassProtectionGrade.Low -> MaterialTheme.colorScheme.error
+            LeanMassProtectionGrade.NoData -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
+    Card(
+        shape = MiniCutCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("근손실 방어 점수", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Surface(
+                color = accent.copy(alpha = 0.12f),
+                contentColor = accent,
+                shape = MiniCutPillShape,
+            ) {
+                Text(
+                    "점수 ${score.score}/100 · 단백질 달성 ${score.proteinHitDays}일 · 저항운동 달성 ${score.resistanceHitDays}일",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Text(
+                score.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MiniCutPanelShape,
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f)),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        dietBreakRecommendation.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        dietBreakRecommendation.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (dietBreakRecommendation.shouldSuggest) {
+                        OutlinedButton(
+                            onClick = onOpenPlan,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("플랜에서 유지 전환 체크")
+                        }
+                    }
+                }
+            }
         }
     }
 }

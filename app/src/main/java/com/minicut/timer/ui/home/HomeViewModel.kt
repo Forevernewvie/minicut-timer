@@ -8,7 +8,9 @@ import com.minicut.timer.domain.model.CalorieEntry
 import com.minicut.timer.domain.model.CalorieAdjustmentRecommendation
 import com.minicut.timer.domain.model.CalorieRangeStatus
 import com.minicut.timer.domain.model.DailyConditionCheck
+import com.minicut.timer.domain.model.DietBreakRecommendation
 import com.minicut.timer.domain.model.EntryQuickPreset
+import com.minicut.timer.domain.model.LeanMassProtectionScore
 import com.minicut.timer.domain.model.MiniCutPlan
 import com.minicut.timer.domain.model.MiniCutPhase
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
@@ -43,6 +45,8 @@ data class HomeUiState(
     val todayConditionCheck: DailyConditionCheck? = null,
     val weeklyWeightTrend: WeeklyWeightTrend = WeeklyWeightTrend(),
     val recoveryRiskAssessment: RecoveryRiskAssessment = RecoveryRiskAssessment(),
+    val leanMassProtectionScore: LeanMassProtectionScore = LeanMassProtectionScore(),
+    val dietBreakRecommendation: DietBreakRecommendation = DietBreakRecommendation(),
     val recommendedProteinGrams: Int? = null,
     val calorieAdjustmentRecommendation: CalorieAdjustmentRecommendation =
         MiniCutRules.recoveryAwareCalorieAdjustmentRecommendation(
@@ -146,6 +150,13 @@ class HomeViewModel(
             val latestWeight =
                 primaryState.todayConditionCheck?.bodyWeightKg
                     ?: primaryState.weeklyConditionChecks.lastOrNull { (it.bodyWeightKg ?: 0f) > 0f }?.bodyWeightKg
+            val recommendedProtein = MiniCutRules.recommendedProteinGrams(latestWeight)
+            val leanMassProtectionScore =
+                MiniCutRules.leanMassProtectionScore(
+                    checks = primaryState.weeklyConditionChecks,
+                    recommendedProteinGrams = recommendedProtein,
+                    recoveryRisk = recoveryRisk,
+                )
             HomeUiState(
                 currentDate = primaryState.currentDate,
                 plan = primaryState.plan,
@@ -162,7 +173,14 @@ class HomeViewModel(
                 todayConditionCheck = primaryState.todayConditionCheck,
                 weeklyWeightTrend = weeklyWeightTrend,
                 recoveryRiskAssessment = recoveryRisk,
-                recommendedProteinGrams = MiniCutRules.recommendedProteinGrams(latestWeight),
+                leanMassProtectionScore = leanMassProtectionScore,
+                dietBreakRecommendation =
+                    MiniCutRules.dietBreakRecommendation(
+                        phase = planPhase,
+                        recoveryRisk = recoveryRisk,
+                        weeklyWeightTrend = weeklyWeightTrend,
+                    ),
+                recommendedProteinGrams = recommendedProtein,
                 calorieAdjustmentRecommendation =
                     MiniCutRules.recoveryAwareCalorieAdjustmentRecommendation(
                         currentTargetKcal = target,
