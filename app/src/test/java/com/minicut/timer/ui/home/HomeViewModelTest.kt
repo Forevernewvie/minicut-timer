@@ -306,6 +306,8 @@ class HomeViewModelTest {
             proteinGrams = 160,
             resistanceSets = 10,
             mainLiftKg = 105f,
+            relapseTrigger = "야식",
+            copingAction = "양치",
             sleepHours = 7.2f,
             fatigueScore = 2,
             hungerScore = 3,
@@ -319,6 +321,8 @@ class HomeViewModelTest {
         assertEquals(160, dailyConditionDao.lastUpsert?.proteinGrams)
         assertEquals(10, dailyConditionDao.lastUpsert?.resistanceSets)
         assertEquals(105f, dailyConditionDao.lastUpsert?.mainLiftKg)
+        assertEquals("야식", dailyConditionDao.lastUpsert?.relapseTrigger)
+        assertEquals("양치", dailyConditionDao.lastUpsert?.copingAction)
         assertEquals(7.2f, dailyConditionDao.lastUpsert?.sleepHours)
         assertEquals(2, dailyConditionDao.lastUpsert?.fatigueScore)
 
@@ -329,6 +333,7 @@ class HomeViewModelTest {
         assertEquals(1300, state.calorieAdjustmentRecommendation.suggestedTargetKcal)
         assertEquals(RecoveryRiskStatus.Stable, state.recoveryRiskAssessment.status)
         assertEquals(StrengthTrendStatus.Up, state.strengthTrend.status)
+        assertEquals("야식", state.relapsePreventionInsight.recurringTrigger)
         collectionJob.cancel()
     }
 
@@ -356,6 +361,8 @@ class HomeViewModelTest {
             proteinGrams = 0,
             resistanceSets = 0,
             mainLiftKg = 0f,
+            relapseTrigger = null,
+            copingAction = null,
             sleepHours = 0f,
             fatigueScore = 0,
             hungerScore = 0,

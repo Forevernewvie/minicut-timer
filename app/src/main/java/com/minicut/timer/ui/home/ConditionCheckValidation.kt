@@ -5,6 +5,8 @@ data class ConditionCheckValidationResult(
     val proteinGrams: Int? = null,
     val resistanceSets: Int? = null,
     val mainLiftKg: Float? = null,
+    val relapseTrigger: String? = null,
+    val copingAction: String? = null,
     val sleepHours: Float? = null,
     val fatigueScore: Int? = null,
     val hungerScore: Int? = null,
@@ -21,6 +23,8 @@ fun validateConditionCheckInput(
     proteinText: String,
     resistanceSetsText: String,
     mainLiftKgText: String,
+    relapseTrigger: String?,
+    copingAction: String?,
     sleepHoursText: String,
     fatigueScoreText: String,
     hungerScoreText: String,
@@ -114,6 +118,8 @@ fun validateConditionCheckInput(
             parsedProtein != null ||
             parsedSets != null ||
             parsedMainLift != null ||
+            !relapseTrigger.isNullOrBlank() ||
+            !copingAction.isNullOrBlank() ||
             parsedSleepHours != null ||
             parsedFatigue != null ||
             parsedHunger != null ||
@@ -128,6 +134,8 @@ fun validateConditionCheckInput(
         proteinGrams = parsedProtein,
         resistanceSets = parsedSets,
         mainLiftKg = parsedMainLift,
+        relapseTrigger = relapseTrigger?.trim()?.takeIf { it.isNotEmpty() },
+        copingAction = copingAction?.trim()?.takeIf { it.isNotEmpty() },
         sleepHours = parsedSleepHours,
         fatigueScore = parsedFatigue,
         hungerScore = parsedHunger,

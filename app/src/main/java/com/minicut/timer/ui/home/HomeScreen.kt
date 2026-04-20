@@ -42,6 +42,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -96,6 +97,7 @@ import com.minicut.timer.domain.model.LeanMassProtectionGrade
 import com.minicut.timer.domain.model.LeanMassProtectionScore
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
+import com.minicut.timer.domain.model.RelapsePreventionInsight
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
 import com.minicut.timer.domain.model.RecoveryRiskStatus
 import com.minicut.timer.domain.model.StrengthTrend
@@ -262,12 +264,14 @@ fun HomeScreen(
                         recommendedProteinGrams = uiState.recommendedProteinGrams,
                         calorieAdjustmentRecommendation = uiState.calorieAdjustmentRecommendation,
                         onOpenPlan = { suggestedTargetKcal -> onOpenPlan(suggestedTargetKcal) },
-                        onSave = { bodyWeightKg, proteinGrams, resistanceSets, mainLiftKg, sleepHours, fatigueScore, hungerScore, moodScore, workoutPerformanceScore ->
+                        onSave = { bodyWeightKg, proteinGrams, resistanceSets, mainLiftKg, relapseTrigger, copingAction, sleepHours, fatigueScore, hungerScore, moodScore, workoutPerformanceScore ->
                             viewModel.saveDailyConditionCheck(
                                 bodyWeightKg = bodyWeightKg,
                                 proteinGrams = proteinGrams,
                                 resistanceSets = resistanceSets,
                                 mainLiftKg = mainLiftKg,
+                                relapseTrigger = relapseTrigger,
+                                copingAction = copingAction,
                                 sleepHours = sleepHours,
                                 fatigueScore = fatigueScore,
                                 hungerScore = hungerScore,
@@ -285,6 +289,7 @@ fun HomeScreen(
                     LeanMassProtectionCard(
                         score = uiState.leanMassProtectionScore,
                         strengthTrend = uiState.strengthTrend,
+                        relapsePreventionInsight = uiState.relapsePreventionInsight,
                         dietBreakRecommendation = uiState.dietBreakRecommendation,
                         onOpenPlan = { onOpenPlan(null) },
                     )
@@ -884,6 +889,7 @@ private fun WeeklyReportCard(
 private fun LeanMassProtectionCard(
     score: LeanMassProtectionScore,
     strengthTrend: StrengthTrend,
+    relapsePreventionInsight: RelapsePreventionInsight,
     dietBreakRecommendation: DietBreakRecommendation,
     onOpenPlan: () -> Unit,
 ) {
@@ -972,6 +978,42 @@ private fun LeanMassProtectionCard(
                     }
                 }
             }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MiniCutPanelShape,
+                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.24f)),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        "재발 방지 툴킷",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (relapsePreventionInsight.recurringTrigger != null) {
+                        Text(
+                            "반복 트리거: ${relapsePreventionInsight.recurringTrigger} (${relapsePreventionInsight.triggerCount}회)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    Text(
+                        relapsePreventionInsight.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    relapsePreventionInsight.recommendedAction?.let { action ->
+                        Text(
+                            "권장 대응: $action",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -984,7 +1026,7 @@ private fun BodyCompositionCheckCard(
     recommendedProteinGrams: Int?,
     calorieAdjustmentRecommendation: CalorieAdjustmentRecommendation,
     onOpenPlan: (Int?) -> Unit,
-    onSave: (Float?, Int?, Int?, Float?, Float?, Int?, Int?, Int?, Int?) -> Unit,
+    onSave: (Float?, Int?, Int?, Float?, String?, String?, Float?, Int?, Int?, Int?, Int?) -> Unit,
     onInvalidInput: (String) -> Unit,
 ) {
     val saveKey = todayCheck?.updatedAt?.toString().orEmpty()
@@ -996,6 +1038,8 @@ private fun BodyCompositionCheckCard(
     var proteinText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.proteinGrams?.toString().orEmpty()) }
     var resistanceSetsText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.resistanceSets?.toString().orEmpty()) }
     var mainLiftKgText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.mainLiftKg?.toString().orEmpty()) }
+    var relapseTrigger by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.relapseTrigger.orEmpty()) }
+    var copingAction by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.copingAction.orEmpty()) }
     var sleepHoursText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.sleepHours?.toString().orEmpty()) }
     var fatigueScoreText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.fatigueScore?.toString().orEmpty()) }
     var hungerScoreText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.hungerScore?.toString().orEmpty()) }
@@ -1140,6 +1184,40 @@ private fun BodyCompositionCheckCard(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
             )
+            Text(
+                "폭식/이탈 트리거",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf("야식", "스트레스", "회식", "수면부족").forEach { trigger ->
+                    FilterChip(
+                        selected = relapseTrigger == trigger,
+                        onClick = { relapseTrigger = if (relapseTrigger == trigger) "" else trigger },
+                        label = { Text(trigger) },
+                    )
+                }
+            }
+            Text(
+                "대응 루틴",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf("산책", "양치", "단백질 간식", "물 500ml").forEach { action ->
+                    FilterChip(
+                        selected = copingAction == action,
+                        onClick = { copingAction = if (copingAction == action) "" else action },
+                        label = { Text(action) },
+                    )
+                }
+            }
             OutlinedTextField(
                 value = sleepHoursText,
                 onValueChange = { sleepHoursText = it.filter { ch -> ch.isDigit() || ch == '.' } },
@@ -1192,6 +1270,8 @@ private fun BodyCompositionCheckCard(
                             proteinText = proteinText,
                             resistanceSetsText = resistanceSetsText,
                             mainLiftKgText = mainLiftKgText,
+                            relapseTrigger = relapseTrigger,
+                            copingAction = copingAction,
                             sleepHoursText = sleepHoursText,
                             fatigueScoreText = fatigueScoreText,
                             hungerScoreText = hungerScoreText,
@@ -1207,6 +1287,8 @@ private fun BodyCompositionCheckCard(
                         validation.proteinGrams,
                         validation.resistanceSets,
                         validation.mainLiftKg,
+                        validation.relapseTrigger,
+                        validation.copingAction,
                         validation.sleepHours,
                         validation.fatigueScore,
                         validation.hungerScore,

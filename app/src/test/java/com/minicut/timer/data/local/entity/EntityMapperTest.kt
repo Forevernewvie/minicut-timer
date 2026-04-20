@@ -93,6 +93,8 @@ class EntityMapperTest {
                 proteinGrams = 160,
                 resistanceSets = 12,
                 mainLiftKg = 105f,
+                relapseTrigger = "야식",
+                copingAction = "양치",
                 sleepHours = 7.5f,
                 fatigueScore = 2,
                 hungerScore = 3,
@@ -109,6 +111,8 @@ class EntityMapperTest {
         assertEquals(domain.proteinGrams, mappedBack.proteinGrams)
         assertEquals(domain.resistanceSets, mappedBack.resistanceSets)
         assertEquals(domain.mainLiftKg, mappedBack.mainLiftKg)
+        assertEquals(domain.relapseTrigger, mappedBack.relapseTrigger)
+        assertEquals(domain.copingAction, mappedBack.copingAction)
         assertEquals(domain.sleepHours, mappedBack.sleepHours)
         assertEquals(domain.fatigueScore, mappedBack.fatigueScore)
         assertEquals(domain.hungerScore, mappedBack.hungerScore)

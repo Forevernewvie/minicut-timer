@@ -422,4 +422,32 @@ class MiniCutRulesTest {
         assertEquals(StrengthTrendStatus.Up, trend.status)
         assertTrue((trend.changePercent ?: 0f) > 0f)
     }
+
+    @Test
+    fun relapsePreventionInsight_picksMostFrequentTrigger() {
+        val insight =
+            MiniCutRules.relapsePreventionInsight(
+                listOf(
+                    DailyConditionCheck(
+                        date = LocalDate.of(2026, 4, 8),
+                        relapseTrigger = "야식",
+                        updatedAt = LocalDateTime.of(2026, 4, 8, 9, 0),
+                    ),
+                    DailyConditionCheck(
+                        date = LocalDate.of(2026, 4, 9),
+                        relapseTrigger = "스트레스",
+                        updatedAt = LocalDateTime.of(2026, 4, 9, 9, 0),
+                    ),
+                    DailyConditionCheck(
+                        date = LocalDate.of(2026, 4, 10),
+                        relapseTrigger = "야식",
+                        updatedAt = LocalDateTime.of(2026, 4, 10, 9, 0),
+                    ),
+                ),
+            )
+
+        assertEquals("야식", insight.recurringTrigger)
+        assertEquals(2, insight.triggerCount)
+        assertTrue(insight.recommendedAction?.contains("양치") == true)
+    }
 }

@@ -13,6 +13,7 @@ import com.minicut.timer.domain.model.ActivityLevel
 import com.minicut.timer.domain.model.DietBreakRecommendation
 import com.minicut.timer.domain.model.LeanMassProtectionGrade
 import com.minicut.timer.domain.model.LeanMassProtectionScore
+import com.minicut.timer.domain.model.RelapsePreventionInsight
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
 import com.minicut.timer.domain.model.RecoveryRiskStatus
 import com.minicut.timer.domain.model.ReverseDietPlan
@@ -406,6 +407,41 @@ object MiniCutRules {
                     message = "핵심 리프트가 안정적이에요 (${rounded}%). 현재 감량 리듬을 유지하세요.",
                 )
         }
+    }
+
+    fun relapsePreventionInsight(
+        checks: List<DailyConditionCheck>,
+    ): RelapsePreventionInsight {
+        val triggers =
+            checks.asSequence()
+                .mapNotNull { it.relapseTrigger?.trim()?.takeIf(String::isNotEmpty) }
+                .groupingBy { it }
+                .eachCount()
+
+        if (triggers.isEmpty()) return RelapsePreventionInsight()
+
+        val recurring = triggers.maxByOrNull { it.value } ?: return RelapsePreventionInsight()
+        val action =
+            when (recurring.key) {
+                "야식" -> "양치 + 단백질 간식으로 마감 루틴 만들기"
+                "스트레스" -> "10분 산책 + 물 500ml 후 결정하기"
+                "회식" -> "식전 단백질 선행 + 첫 접시 고정하기"
+                "수면부족" -> "오늘은 유지 칼로리 또는 미니 브레이크 우선 고려하기"
+                else -> "반복 트리거가 오는 시간대에 미리 대체 행동을 정해두기"
+            }
+        val message =
+            if (recurring.value >= 2) {
+                "최근 반복 트리거는 '${recurring.key}' (${recurring.value}회)예요. 대응 루틴을 먼저 고정하면 폭식/이탈을 줄이기 쉽습니다."
+            } else {
+                "가장 최근 기록된 트리거는 '${recurring.key}'예요. 같은 상황이 오기 전에 대응 루틴을 준비해보세요."
+            }
+
+        return RelapsePreventionInsight(
+            recurringTrigger = recurring.key,
+            recommendedAction = action,
+            triggerCount = recurring.value,
+            message = message,
+        )
     }
 
     fun calorieAdjustmentRecommendation(

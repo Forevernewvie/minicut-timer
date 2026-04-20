@@ -15,6 +15,8 @@ class ConditionCheckValidationTest {
                 proteinText = "0",
                 resistanceSetsText = "0",
                 mainLiftKgText = "",
+                relapseTrigger = null,
+                copingAction = null,
                 sleepHoursText = "",
                 fatigueScoreText = "",
                 hungerScoreText = "",
@@ -34,6 +36,8 @@ class ConditionCheckValidationTest {
                 proteinText = "",
                 resistanceSetsText = "",
                 mainLiftKgText = "",
+                relapseTrigger = null,
+                copingAction = null,
                 sleepHoursText = "",
                 fatigueScoreText = "",
                 hungerScoreText = "",
@@ -53,6 +57,8 @@ class ConditionCheckValidationTest {
                 proteinText = "160",
                 resistanceSetsText = "12",
                 mainLiftKgText = "105",
+                relapseTrigger = "스트레스",
+                copingAction = "산책",
                 sleepHoursText = "7.5",
                 fatigueScoreText = "2",
                 hungerScoreText = "3",
@@ -65,6 +71,8 @@ class ConditionCheckValidationTest {
         assertEquals(160, result.proteinGrams)
         assertEquals(12, result.resistanceSets)
         assertEquals(105f, result.mainLiftKg)
+        assertEquals("스트레스", result.relapseTrigger)
+        assertEquals("산책", result.copingAction)
         assertEquals(7.5f, result.sleepHours)
         assertEquals(2, result.fatigueScore)
         assertEquals(3, result.hungerScore)

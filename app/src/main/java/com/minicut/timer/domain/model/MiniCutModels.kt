@@ -124,6 +124,8 @@ data class DailyConditionCheck(
     val proteinGrams: Int? = null,
     val resistanceSets: Int? = null,
     val mainLiftKg: Float? = null,
+    val relapseTrigger: String? = null,
+    val copingAction: String? = null,
     val sleepHours: Float? = null,
     val fatigueScore: Int? = null,
     val hungerScore: Int? = null,
@@ -143,6 +145,13 @@ data class StrengthTrend(
     val status: StrengthTrendStatus = StrengthTrendStatus.NoData,
     val changePercent: Float? = null,
     val message: String = "핵심 리프트 기록이 쌓이면 주간 근력 추세를 분석해요.",
+)
+
+data class RelapsePreventionInsight(
+    val recurringTrigger: String? = null,
+    val recommendedAction: String? = null,
+    val triggerCount: Int = 0,
+    val message: String = "트리거를 기록하면 반복 패턴과 대응 루틴을 제안해요.",
 )
 
 enum class WeeklyWeightTrendStatus {

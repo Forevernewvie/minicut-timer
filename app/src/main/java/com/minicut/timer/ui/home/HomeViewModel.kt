@@ -13,6 +13,7 @@ import com.minicut.timer.domain.model.EntryQuickPreset
 import com.minicut.timer.domain.model.LeanMassProtectionScore
 import com.minicut.timer.domain.model.MiniCutPlan
 import com.minicut.timer.domain.model.MiniCutPhase
+import com.minicut.timer.domain.model.RelapsePreventionInsight
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
 import com.minicut.timer.domain.model.StrengthTrend
 import com.minicut.timer.domain.model.WeeklyAdherenceReport
@@ -47,6 +48,7 @@ data class HomeUiState(
     val weeklyWeightTrend: WeeklyWeightTrend = WeeklyWeightTrend(),
     val strengthTrend: StrengthTrend = StrengthTrend(),
     val recoveryRiskAssessment: RecoveryRiskAssessment = RecoveryRiskAssessment(),
+    val relapsePreventionInsight: RelapsePreventionInsight = RelapsePreventionInsight(),
     val leanMassProtectionScore: LeanMassProtectionScore = LeanMassProtectionScore(),
     val dietBreakRecommendation: DietBreakRecommendation = DietBreakRecommendation(),
     val recommendedProteinGrams: Int? = null,
@@ -150,6 +152,7 @@ class HomeViewModel(
             val weeklyWeightTrend = MiniCutRules.weeklyWeightTrend(primaryState.weeklyConditionChecks)
             val strengthTrend = MiniCutRules.strengthTrend(primaryState.weeklyConditionChecks)
             val recoveryRisk = MiniCutRules.recoveryRiskAssessment(primaryState.weeklyConditionChecks)
+            val relapseInsight = MiniCutRules.relapsePreventionInsight(primaryState.weeklyConditionChecks)
             val latestWeight =
                 primaryState.todayConditionCheck?.bodyWeightKg
                     ?: primaryState.weeklyConditionChecks.lastOrNull { (it.bodyWeightKg ?: 0f) > 0f }?.bodyWeightKg
@@ -177,6 +180,7 @@ class HomeViewModel(
                 weeklyWeightTrend = weeklyWeightTrend,
                 strengthTrend = strengthTrend,
                 recoveryRiskAssessment = recoveryRisk,
+                relapsePreventionInsight = relapseInsight,
                 leanMassProtectionScore = leanMassProtectionScore,
                 dietBreakRecommendation =
                     MiniCutRules.dietBreakRecommendation(
@@ -262,6 +266,8 @@ class HomeViewModel(
         proteinGrams: Int?,
         resistanceSets: Int?,
         mainLiftKg: Float?,
+        relapseTrigger: String?,
+        copingAction: String?,
         sleepHours: Float?,
         fatigueScore: Int?,
         hungerScore: Int?,
@@ -275,6 +281,8 @@ class HomeViewModel(
                 proteinGrams = proteinGrams,
                 resistanceSets = resistanceSets,
                 mainLiftKg = mainLiftKg,
+                relapseTrigger = relapseTrigger,
+                copingAction = copingAction,
                 sleepHours = sleepHours,
                 fatigueScore = fatigueScore,
                 hungerScore = hungerScore,

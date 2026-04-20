@@ -17,6 +17,7 @@ class AppContainer(context: Context) {
             MiniCutDatabase.MIGRATION_5_6,
             MiniCutDatabase.MIGRATION_6_7,
             MiniCutDatabase.MIGRATION_7_8,
+            MiniCutDatabase.MIGRATION_8_9,
         )
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()

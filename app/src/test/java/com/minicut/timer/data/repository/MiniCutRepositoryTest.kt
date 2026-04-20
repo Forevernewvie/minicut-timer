@@ -328,6 +328,8 @@ class MiniCutRepositoryTest {
             proteinGrams = 160,
             resistanceSets = 12,
             mainLiftKg = 105f,
+            relapseTrigger = "스트레스",
+            copingAction = "산책",
             sleepHours = 7.0f,
             fatigueScore = 2,
             hungerScore = 3,
@@ -342,6 +344,8 @@ class MiniCutRepositoryTest {
         assertEquals(160, oneDay?.proteinGrams)
         assertEquals(12, oneDay?.resistanceSets)
         assertEquals(105f, oneDay?.mainLiftKg)
+        assertEquals("스트레스", oneDay?.relapseTrigger)
+        assertEquals("산책", oneDay?.copingAction)
         assertEquals(7.0f, oneDay?.sleepHours)
         assertEquals(2, oneDay?.fatigueScore)
         assertEquals(1, range.size)
@@ -360,6 +364,8 @@ class MiniCutRepositoryTest {
             proteinGrams = 0,
             resistanceSets = 0,
             mainLiftKg = 0f,
+            relapseTrigger = null,
+            copingAction = null,
             sleepHours = 0f,
             fatigueScore = 0,
             hungerScore = 0,
