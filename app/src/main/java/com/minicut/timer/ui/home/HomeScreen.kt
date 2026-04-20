@@ -131,6 +131,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     onOpenPlan: (Int?) -> Unit,
+    onOpenCoach: () -> Unit,
 ) {
     val context = LocalContext.current
     val repository = context.miniCutRepository
@@ -140,12 +141,6 @@ fun HomeScreen(
     var showEntrySheet by rememberSaveable { mutableStateOf(false) }
     var editingEntry by remember { mutableStateOf<CalorieEntry?>(null) }
     var maintenanceChecks by rememberSaveable { mutableStateOf(setOf<Int>()) }
-    var notificationSettings by remember { mutableStateOf(NotificationPreferences.load(context)) }
-    val notificationPermissionGranted =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
-    val dialogButtonColor = MaterialTheme.colorScheme.primary.toArgb()
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
 
@@ -153,32 +148,6 @@ fun HomeScreen(
         snackbarScope.launch {
             snackbarHostState.showSnackbar(message)
         }
-    }
-
-    fun persistNotificationSettings(updated: NotificationSettings) {
-        notificationSettings = updated
-        NotificationPreferences.save(context, updated)
-        syncMiniCutNotifications(context, updated)
-    }
-
-    fun openReminderTimePicker(slot: ReminderSlot) {
-        val currentTime = notificationSettings.settingFor(slot).time
-        TimePickerDialog(
-            context,
-            { _, hourOfDay, minute ->
-                persistNotificationSettings(
-                    notificationSettings.updateSlot(slot) { it.copy(time = ReminderTime(hourOfDay = hourOfDay, minute = minute)) },
-                )
-            },
-            currentTime.hourOfDay,
-            currentTime.minute,
-            true,
-        ).apply {
-            setOnShowListener {
-                getButton(TimePickerDialog.BUTTON_POSITIVE)?.setTextColor(dialogButtonColor)
-                getButton(TimePickerDialog.BUTTON_NEGATIVE)?.setTextColor(dialogButtonColor)
-            }
-        }.show()
     }
 
     MiniCutBackdrop {
@@ -257,54 +226,10 @@ fun HomeScreen(
                     )
                 }
                 item {
-                    BodyCompositionCheckCard(
-                        todayCheck = uiState.todayConditionCheck,
-                        weeklyWeightTrend = uiState.weeklyWeightTrend,
-                        recoveryRiskAssessment = uiState.recoveryRiskAssessment,
-                        recommendedProteinGrams = uiState.recommendedProteinGrams,
-                        calorieAdjustmentRecommendation = uiState.calorieAdjustmentRecommendation,
-                        onOpenPlan = { suggestedTargetKcal -> onOpenPlan(suggestedTargetKcal) },
-                        onSave = { bodyWeightKg, proteinGrams, resistanceSets, mainLiftKg, relapseTrigger, copingAction, sleepHours, fatigueScore, hungerScore, moodScore, workoutPerformanceScore ->
-                            viewModel.saveDailyConditionCheck(
-                                bodyWeightKg = bodyWeightKg,
-                                proteinGrams = proteinGrams,
-                                resistanceSets = resistanceSets,
-                                mainLiftKg = mainLiftKg,
-                                relapseTrigger = relapseTrigger,
-                                copingAction = copingAction,
-                                sleepHours = sleepHours,
-                                fatigueScore = fatigueScore,
-                                hungerScore = hungerScore,
-                                moodScore = moodScore,
-                                workoutPerformanceScore = workoutPerformanceScore,
-                            )
-                            showMessage("근손실 방어 체크인을 저장했어요")
-                        },
-                        onInvalidInput = { message ->
-                            showMessage(message)
-                        },
-                    )
-                }
-                item {
-                    LeanMassProtectionCard(
-                        score = uiState.leanMassProtectionScore,
-                        strengthTrend = uiState.strengthTrend,
-                        relapsePreventionInsight = uiState.relapsePreventionInsight,
-                        dietBreakRecommendation = uiState.dietBreakRecommendation,
-                        onOpenPlan = { onOpenPlan(null) },
-                    )
-                }
-                item {
-                    NotificationSettingsCard(
-                        settings = notificationSettings,
-                        notificationPermissionGranted = notificationPermissionGranted,
-                        onCadenceChange = { cadence ->
-                            persistNotificationSettings(notificationSettings.copy(cadence = cadence))
-                        },
-                        onToggleSlot = { slot, enabled ->
-                            persistNotificationSettings(notificationSettings.updateSlot(slot) { it.copy(enabled = enabled) })
-                        },
-                        onEditTime = ::openReminderTimePicker,
+                    CoachHubCard(
+                        recoveryMessage = uiState.recoveryRiskAssessment.message,
+                        strengthMessage = uiState.strengthTrend.message,
+                        onOpenCoach = onOpenCoach,
                     )
                 }
                 item {
@@ -623,7 +548,7 @@ private fun PlanOverviewCard(
 }
 
 @Composable
-private fun NotificationSettingsCard(
+internal fun NotificationSettingsCard(
     settings: NotificationSettings,
     notificationPermissionGranted: Boolean,
     onCadenceChange: (ReminderCadence) -> Unit,
@@ -886,7 +811,51 @@ private fun WeeklyReportCard(
 }
 
 @Composable
-private fun LeanMassProtectionCard(
+private fun CoachHubCard(
+    recoveryMessage: String,
+    strengthMessage: String,
+    onOpenCoach: () -> Unit,
+) {
+    Card(
+        shape = MiniCutCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("코칭 허브로 분리했어요", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                "회복 체크, 근손실 방어 점수, 브레이크 권고, 리마인더는 이제 코칭 탭에서 관리합니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MiniCutPillShape,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(recoveryMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(strengthMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            OutlinedButton(
+                onClick = onOpenCoach,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("코칭 탭 열기")
+            }
+        }
+    }
+}
+
+@Composable
+internal fun LeanMassProtectionCard(
     score: LeanMassProtectionScore,
     strengthTrend: StrengthTrend,
     relapsePreventionInsight: RelapsePreventionInsight,
@@ -1019,7 +988,7 @@ private fun LeanMassProtectionCard(
 }
 
 @Composable
-private fun BodyCompositionCheckCard(
+internal fun BodyCompositionCheckCard(
     todayCheck: DailyConditionCheck?,
     weeklyWeightTrend: WeeklyWeightTrend,
     recoveryRiskAssessment: RecoveryRiskAssessment,
