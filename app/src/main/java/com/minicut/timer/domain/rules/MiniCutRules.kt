@@ -421,14 +421,7 @@ object MiniCutRules {
         if (triggers.isEmpty()) return RelapsePreventionInsight()
 
         val recurring = triggers.maxByOrNull { it.value } ?: return RelapsePreventionInsight()
-        val action =
-            when (recurring.key) {
-                "야식" -> "양치 + 단백질 간식으로 마감 루틴 만들기"
-                "스트레스" -> "10분 산책 + 물 500ml 후 결정하기"
-                "회식" -> "식전 단백질 선행 + 첫 접시 고정하기"
-                "수면부족" -> "오늘은 유지 칼로리 또는 미니 브레이크 우선 고려하기"
-                else -> "반복 트리거가 오는 시간대에 미리 대체 행동을 정해두기"
-            }
+        val action = RelapsePreventionCatalog.recommendedActionFor(recurring.key)
         val message =
             if (recurring.value >= 2) {
                 "최근 반복 트리거는 '${recurring.key}' (${recurring.value}회)예요. 대응 루틴을 먼저 고정하면 폭식/이탈을 줄이기 쉽습니다."

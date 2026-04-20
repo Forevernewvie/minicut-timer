@@ -30,7 +30,6 @@ import androidx.navigation.navArgument
 import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.ui.calendar.CalendarScreen
 import com.minicut.timer.ui.components.AdMobBanner
-import com.minicut.timer.ui.home.CoachScreen
 import com.minicut.timer.ui.home.HomeScreen
 import com.minicut.timer.ui.navigation.Destination
 import com.minicut.timer.ui.plan.PlanScreen
@@ -130,18 +129,6 @@ fun MiniCutRoot() {
         ) {
             composable(Destination.Home.route) {
                 HomeScreen(
-                    onOpenPlan = { suggestedTargetKcal ->
-                        val route =
-                            suggestedTargetKcal?.takeIf { it in MiniCutRules.TARGET_OPTIONS_KCAL }
-                                ?.let { Destination.planRouteWithSuggestedTarget(it) }
-                                ?: Destination.Plan.route
-                        navController.navigate(route)
-                    },
-                    onOpenCoach = { navController.navigate(Destination.Coach.route) },
-                )
-            }
-            composable(Destination.Coach.route) {
-                CoachScreen(
                     onOpenPlan = { suggestedTargetKcal ->
                         val route =
                             suggestedTargetKcal?.takeIf { it in MiniCutRules.TARGET_OPTIONS_KCAL }

@@ -1,6 +1,10 @@
 package com.minicut.timer.ui.plan
 
+import android.Manifest
 import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,8 +53,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.minicut.timer.data.local.NotificationPreferences
 import com.minicut.timer.domain.model.ActivityLevel
 import com.minicut.timer.domain.model.DeficitGuardrail
 import com.minicut.timer.domain.model.DeficitRiskLevel
@@ -65,6 +71,11 @@ import com.minicut.timer.ui.components.MiniCutInlineFeedbackTone
 import com.minicut.timer.ui.components.MiniCutPanelShape
 import com.minicut.timer.ui.components.MiniCutPillShape
 import com.minicut.timer.ui.components.MiniCutSectionHeader
+import com.minicut.timer.ui.home.NotificationSettingsCard
+import com.minicut.timer.notifications.NotificationSettings
+import com.minicut.timer.notifications.ReminderSlot
+import com.minicut.timer.notifications.ReminderTime
+import com.minicut.timer.notifications.syncMiniCutNotifications
 import com.minicut.timer.ui.util.asCompactDate
 import com.minicut.timer.ui.util.asKcal
 import com.minicut.timer.ui.util.miniCutRepository
@@ -80,6 +91,11 @@ fun PlanScreen(
     val repository = context.miniCutRepository
     val viewModel: PlanViewModel = viewModel(factory = PlanViewModel.factory(repository))
     val existingPlan by viewModel.plan.collectAsStateWithLifecycle()
+    var notificationSettings by remember { mutableStateOf(NotificationPreferences.load(context)) }
+    val notificationPermissionGranted =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
 
     var startDate by rememberSaveable { mutableStateOf(LocalDate.now()) }
     var durationWeeks by rememberSaveable { mutableIntStateOf(4) }
@@ -174,6 +190,34 @@ fun PlanScreen(
     }
     val isSuitabilityConfirmed = acknowledgeNotStrengthPeak && acknowledgeNotLongTermDiet && acknowledgeNotMassGainAvoidance
     val canSavePlan = hasPlanChanges && isSuitabilityConfirmed && deficitGuardrail.canSave
+
+    fun persistNotificationSettings(updated: NotificationSettings) {
+        notificationSettings = updated
+        NotificationPreferences.save(context, updated)
+        syncMiniCutNotifications(context, updated)
+        inlineFeedbackTone = MiniCutInlineFeedbackTone.Info
+        inlineFeedbackMessage = "리마인더 설정을 저장했어요."
+    }
+
+    fun openReminderTimePicker(slot: ReminderSlot) {
+        val currentTime = notificationSettings.settingFor(slot).time
+        TimePickerDialog(
+            context,
+            { _, hourOfDay, minute ->
+                persistNotificationSettings(
+                    notificationSettings.updateSlot(slot) { it.copy(time = ReminderTime(hourOfDay = hourOfDay, minute = minute)) },
+                )
+            },
+            currentTime.hourOfDay,
+            currentTime.minute,
+            true,
+        ).apply {
+            setOnShowListener {
+                getButton(TimePickerDialog.BUTTON_POSITIVE)?.setTextColor(dialogButtonColor)
+                getButton(TimePickerDialog.BUTTON_NEGATIVE)?.setTextColor(dialogButtonColor)
+            }
+        }.show()
+    }
 
     if (showDataResetDialog) {
         AlertDialog(
@@ -437,6 +481,19 @@ fun PlanScreen(
                 }
                 item {
                     TargetGuidanceCard(guidance = targetGuidance)
+                }
+                item {
+                    NotificationSettingsCard(
+                        settings = notificationSettings,
+                        notificationPermissionGranted = notificationPermissionGranted,
+                        onCadenceChange = { cadence ->
+                            persistNotificationSettings(notificationSettings.copy(cadence = cadence))
+                        },
+                        onToggleSlot = { slot, enabled ->
+                            persistNotificationSettings(notificationSettings.updateSlot(slot) { it.copy(enabled = enabled) })
+                        },
+                        onEditTime = ::openReminderTimePicker,
+                    )
                 }
                 item {
                     DataManagementCard(
