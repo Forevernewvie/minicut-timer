@@ -13,7 +13,7 @@ import com.minicut.timer.data.local.entity.MiniCutPlanEntity
 
 @Database(
     entities = [MiniCutPlanEntity::class, CalorieEntryEntity::class, DailyConditionCheckEntity::class],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class MiniCutDatabase : RoomDatabase() {
@@ -81,6 +81,15 @@ abstract class MiniCutDatabase : RoomDatabase() {
                     )
                     db.execSQL(
                         "ALTER TABLE daily_condition_checks ADD COLUMN workoutPerformanceScore INTEGER",
+                    )
+                }
+            }
+
+        val MIGRATION_7_8 =
+            object : Migration(7, 8) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "ALTER TABLE daily_condition_checks ADD COLUMN mainLiftKg REAL",
                     )
                 }
             }

@@ -17,6 +17,8 @@ import com.minicut.timer.domain.model.RecoveryRiskAssessment
 import com.minicut.timer.domain.model.RecoveryRiskStatus
 import com.minicut.timer.domain.model.ReverseDietPlan
 import com.minicut.timer.domain.model.ReverseDietStep
+import com.minicut.timer.domain.model.StrengthTrend
+import com.minicut.timer.domain.model.StrengthTrendStatus
 import com.minicut.timer.domain.model.TargetGuidance
 import com.minicut.timer.domain.model.TargetGuidanceTone
 import com.minicut.timer.domain.model.WeeklyWeightTrend
@@ -365,6 +367,43 @@ object MiniCutRules {
                     status = WeeklyWeightTrendStatus.TooFast,
                     ratePercentPerWeek = rounded,
                     message = "감량 속도가 너무 빨라요. 근손실/반동 위험을 줄이기 위해 섭취량을 소폭 올리는 것을 권장합니다.",
+                )
+        }
+    }
+
+    fun strengthTrend(
+        checks: List<DailyConditionCheck>,
+    ): StrengthTrend {
+        val records = checks.filter { (it.mainLiftKg ?: 0f) > 0f }.sortedBy { it.date }
+        if (records.size < 2) return StrengthTrend()
+
+        val first = records.first().mainLiftKg ?: return StrengthTrend()
+        val last = records.last().mainLiftKg ?: return StrengthTrend()
+        if (first <= 0f) return StrengthTrend()
+
+        val changePercent = ((last - first) / first) * 100f
+        val rounded = (changePercent * 10f).roundToInt() / 10f
+
+        return when {
+            changePercent >= 2.0f ->
+                StrengthTrend(
+                    status = StrengthTrendStatus.Up,
+                    changePercent = rounded,
+                    message = "핵심 리프트가 상승 추세예요 (+${rounded}%). 감량 중 근력 방어가 잘 되고 있습니다.",
+                )
+
+            changePercent <= -2.0f ->
+                StrengthTrend(
+                    status = StrengthTrendStatus.Down,
+                    changePercent = rounded,
+                    message = "핵심 리프트가 하락 추세예요 (${rounded}%). 회복/브레이크/목표 완화를 우선 점검하세요.",
+                )
+
+            else ->
+                StrengthTrend(
+                    status = StrengthTrendStatus.Stable,
+                    changePercent = rounded,
+                    message = "핵심 리프트가 안정적이에요 (${rounded}%). 현재 감량 리듬을 유지하세요.",
                 )
         }
     }

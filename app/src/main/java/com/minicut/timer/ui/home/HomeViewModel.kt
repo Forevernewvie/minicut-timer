@@ -14,6 +14,7 @@ import com.minicut.timer.domain.model.LeanMassProtectionScore
 import com.minicut.timer.domain.model.MiniCutPlan
 import com.minicut.timer.domain.model.MiniCutPhase
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
+import com.minicut.timer.domain.model.StrengthTrend
 import com.minicut.timer.domain.model.WeeklyAdherenceReport
 import com.minicut.timer.domain.model.WeeklyWeightTrend
 import com.minicut.timer.domain.rules.MiniCutRules
@@ -44,6 +45,7 @@ data class HomeUiState(
     val weeklyReport: WeeklyAdherenceReport = WeeklyAdherenceReport(),
     val todayConditionCheck: DailyConditionCheck? = null,
     val weeklyWeightTrend: WeeklyWeightTrend = WeeklyWeightTrend(),
+    val strengthTrend: StrengthTrend = StrengthTrend(),
     val recoveryRiskAssessment: RecoveryRiskAssessment = RecoveryRiskAssessment(),
     val leanMassProtectionScore: LeanMassProtectionScore = LeanMassProtectionScore(),
     val dietBreakRecommendation: DietBreakRecommendation = DietBreakRecommendation(),
@@ -146,6 +148,7 @@ class HomeViewModel(
             val target = primaryState.plan?.dailyTargetKcal ?: MiniCutRules.DEFAULT_TARGET_KCAL
             val planPhase = primaryState.plan?.let { MiniCutRules.phaseOf(it.startDate, it.endDate, primaryState.currentDate) }
             val weeklyWeightTrend = MiniCutRules.weeklyWeightTrend(primaryState.weeklyConditionChecks)
+            val strengthTrend = MiniCutRules.strengthTrend(primaryState.weeklyConditionChecks)
             val recoveryRisk = MiniCutRules.recoveryRiskAssessment(primaryState.weeklyConditionChecks)
             val latestWeight =
                 primaryState.todayConditionCheck?.bodyWeightKg
@@ -172,6 +175,7 @@ class HomeViewModel(
                 weeklyReport = MiniCutRules.weeklyAdherenceReport(weeklySummaries, target),
                 todayConditionCheck = primaryState.todayConditionCheck,
                 weeklyWeightTrend = weeklyWeightTrend,
+                strengthTrend = strengthTrend,
                 recoveryRiskAssessment = recoveryRisk,
                 leanMassProtectionScore = leanMassProtectionScore,
                 dietBreakRecommendation =
@@ -257,6 +261,7 @@ class HomeViewModel(
         bodyWeightKg: Float?,
         proteinGrams: Int?,
         resistanceSets: Int?,
+        mainLiftKg: Float?,
         sleepHours: Float?,
         fatigueScore: Int?,
         hungerScore: Int?,
@@ -269,6 +274,7 @@ class HomeViewModel(
                 bodyWeightKg = bodyWeightKg,
                 proteinGrams = proteinGrams,
                 resistanceSets = resistanceSets,
+                mainLiftKg = mainLiftKg,
                 sleepHours = sleepHours,
                 fatigueScore = fatigueScore,
                 hungerScore = hungerScore,

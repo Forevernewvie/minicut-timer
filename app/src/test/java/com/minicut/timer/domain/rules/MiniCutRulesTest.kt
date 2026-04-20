@@ -11,6 +11,7 @@ import com.minicut.timer.domain.model.ActivityLevel
 import com.minicut.timer.domain.model.LeanMassProtectionGrade
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
 import com.minicut.timer.domain.model.RecoveryRiskStatus
+import com.minicut.timer.domain.model.StrengthTrendStatus
 import com.minicut.timer.domain.model.TargetGuidanceTone
 import com.minicut.timer.domain.model.WeeklyWeightTrend
 import com.minicut.timer.domain.model.WeeklyWeightTrendStatus
@@ -398,5 +399,27 @@ class MiniCutRulesTest {
 
         assertTrue(recommendation.shouldSuggest)
         assertEquals(5, recommendation.suggestedDays)
+    }
+
+    @Test
+    fun strengthTrend_reportsUpWhenMainLiftImproves() {
+        val trend =
+            MiniCutRules.strengthTrend(
+                listOf(
+                    DailyConditionCheck(
+                        date = LocalDate.of(2026, 4, 1),
+                        mainLiftKg = 100f,
+                        updatedAt = LocalDateTime.of(2026, 4, 1, 9, 0),
+                    ),
+                    DailyConditionCheck(
+                        date = LocalDate.of(2026, 4, 8),
+                        mainLiftKg = 104f,
+                        updatedAt = LocalDateTime.of(2026, 4, 8, 9, 0),
+                    ),
+                ),
+            )
+
+        assertEquals(StrengthTrendStatus.Up, trend.status)
+        assertTrue((trend.changePercent ?: 0f) > 0f)
     }
 }

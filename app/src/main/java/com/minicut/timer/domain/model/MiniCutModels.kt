@@ -123,12 +123,26 @@ data class DailyConditionCheck(
     val bodyWeightKg: Float? = null,
     val proteinGrams: Int? = null,
     val resistanceSets: Int? = null,
+    val mainLiftKg: Float? = null,
     val sleepHours: Float? = null,
     val fatigueScore: Int? = null,
     val hungerScore: Int? = null,
     val moodScore: Int? = null,
     val workoutPerformanceScore: Int? = null,
     val updatedAt: LocalDateTime,
+)
+
+enum class StrengthTrendStatus {
+    NoData,
+    Up,
+    Stable,
+    Down,
+}
+
+data class StrengthTrend(
+    val status: StrengthTrendStatus = StrengthTrendStatus.NoData,
+    val changePercent: Float? = null,
+    val message: String = "핵심 리프트 기록이 쌓이면 주간 근력 추세를 분석해요.",
 )
 
 enum class WeeklyWeightTrendStatus {

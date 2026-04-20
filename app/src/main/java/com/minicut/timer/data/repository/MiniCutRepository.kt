@@ -174,6 +174,7 @@ class MiniCutRepository(
         bodyWeightKg: Float?,
         proteinGrams: Int?,
         resistanceSets: Int?,
+        mainLiftKg: Float?,
         sleepHours: Float?,
         fatigueScore: Int?,
         hungerScore: Int?,
@@ -184,6 +185,7 @@ class MiniCutRepository(
             (bodyWeightKg ?: 0f) > 0f ||
                 (proteinGrams ?: 0) > 0 ||
                 (resistanceSets ?: 0) > 0 ||
+                (mainLiftKg ?: 0f) > 0f ||
                 (sleepHours ?: 0f) > 0f ||
                 (fatigueScore ?: 0) > 0 ||
                 (hungerScore ?: 0) > 0 ||
@@ -198,6 +200,7 @@ class MiniCutRepository(
                 bodyWeightKg = bodyWeightKg?.takeIf { it > 0f },
                 proteinGrams = proteinGrams?.takeIf { it > 0 },
                 resistanceSets = resistanceSets?.takeIf { it > 0 },
+                mainLiftKg = mainLiftKg?.takeIf { it > 0f },
                 sleepHours = sleepHours?.takeIf { it > 0f },
                 fatigueScore = fatigueScore?.takeIf { it in 1..5 },
                 hungerScore = hungerScore?.takeIf { it in 1..5 },

@@ -14,6 +14,7 @@ class ConditionCheckValidationTest {
                 bodyWeightText = "0",
                 proteinText = "0",
                 resistanceSetsText = "0",
+                mainLiftKgText = "",
                 sleepHoursText = "",
                 fatigueScoreText = "",
                 hungerScoreText = "",
@@ -32,6 +33,7 @@ class ConditionCheckValidationTest {
                 bodyWeightText = "   ",
                 proteinText = "",
                 resistanceSetsText = "",
+                mainLiftKgText = "",
                 sleepHoursText = "",
                 fatigueScoreText = "",
                 hungerScoreText = "",
@@ -50,6 +52,7 @@ class ConditionCheckValidationTest {
                 bodyWeightText = "79.4",
                 proteinText = "160",
                 resistanceSetsText = "12",
+                mainLiftKgText = "105",
                 sleepHoursText = "7.5",
                 fatigueScoreText = "2",
                 hungerScoreText = "3",
@@ -61,6 +64,7 @@ class ConditionCheckValidationTest {
         assertEquals(79.4f, result.bodyWeightKg)
         assertEquals(160, result.proteinGrams)
         assertEquals(12, result.resistanceSets)
+        assertEquals(105f, result.mainLiftKg)
         assertEquals(7.5f, result.sleepHours)
         assertEquals(2, result.fatigueScore)
         assertEquals(3, result.hungerScore)

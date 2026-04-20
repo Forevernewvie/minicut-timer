@@ -98,6 +98,8 @@ import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
 import com.minicut.timer.domain.model.RecoveryRiskStatus
+import com.minicut.timer.domain.model.StrengthTrend
+import com.minicut.timer.domain.model.StrengthTrendStatus
 import com.minicut.timer.domain.model.WeeklyAdherenceReport
 import com.minicut.timer.domain.model.WeeklyWeightTrend
 import com.minicut.timer.domain.model.WeeklyWeightTrendStatus
@@ -260,11 +262,12 @@ fun HomeScreen(
                         recommendedProteinGrams = uiState.recommendedProteinGrams,
                         calorieAdjustmentRecommendation = uiState.calorieAdjustmentRecommendation,
                         onOpenPlan = { suggestedTargetKcal -> onOpenPlan(suggestedTargetKcal) },
-                        onSave = { bodyWeightKg, proteinGrams, resistanceSets, sleepHours, fatigueScore, hungerScore, moodScore, workoutPerformanceScore ->
+                        onSave = { bodyWeightKg, proteinGrams, resistanceSets, mainLiftKg, sleepHours, fatigueScore, hungerScore, moodScore, workoutPerformanceScore ->
                             viewModel.saveDailyConditionCheck(
                                 bodyWeightKg = bodyWeightKg,
                                 proteinGrams = proteinGrams,
                                 resistanceSets = resistanceSets,
+                                mainLiftKg = mainLiftKg,
                                 sleepHours = sleepHours,
                                 fatigueScore = fatigueScore,
                                 hungerScore = hungerScore,
@@ -281,6 +284,7 @@ fun HomeScreen(
                 item {
                     LeanMassProtectionCard(
                         score = uiState.leanMassProtectionScore,
+                        strengthTrend = uiState.strengthTrend,
                         dietBreakRecommendation = uiState.dietBreakRecommendation,
                         onOpenPlan = { onOpenPlan(null) },
                     )
@@ -879,6 +883,7 @@ private fun WeeklyReportCard(
 @Composable
 private fun LeanMassProtectionCard(
     score: LeanMassProtectionScore,
+    strengthTrend: StrengthTrend,
     dietBreakRecommendation: DietBreakRecommendation,
     onOpenPlan: () -> Unit,
 ) {
@@ -917,6 +922,26 @@ private fun LeanMassProtectionCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            val strengthAccent =
+                when (strengthTrend.status) {
+                    StrengthTrendStatus.Up -> MaterialTheme.colorScheme.primary
+                    StrengthTrendStatus.Stable -> MaterialTheme.colorScheme.tertiary
+                    StrengthTrendStatus.Down -> MaterialTheme.colorScheme.error
+                    StrengthTrendStatus.NoData -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MiniCutPillShape,
+                color = strengthAccent.copy(alpha = 0.10f),
+            ) {
+                val changeText = strengthTrend.changePercent?.let { "${it}%" } ?: "데이터 대기"
+                Text(
+                    "핵심 리프트 추세 ${changeText} · ${strengthTrend.message}",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = strengthAccent,
+                )
+            }
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MiniCutPanelShape,
@@ -959,7 +984,7 @@ private fun BodyCompositionCheckCard(
     recommendedProteinGrams: Int?,
     calorieAdjustmentRecommendation: CalorieAdjustmentRecommendation,
     onOpenPlan: (Int?) -> Unit,
-    onSave: (Float?, Int?, Int?, Float?, Int?, Int?, Int?, Int?) -> Unit,
+    onSave: (Float?, Int?, Int?, Float?, Float?, Int?, Int?, Int?, Int?) -> Unit,
     onInvalidInput: (String) -> Unit,
 ) {
     val saveKey = todayCheck?.updatedAt?.toString().orEmpty()
@@ -970,6 +995,7 @@ private fun BodyCompositionCheckCard(
     }
     var proteinText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.proteinGrams?.toString().orEmpty()) }
     var resistanceSetsText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.resistanceSets?.toString().orEmpty()) }
+    var mainLiftKgText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.mainLiftKg?.toString().orEmpty()) }
     var sleepHoursText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.sleepHours?.toString().orEmpty()) }
     var fatigueScoreText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.fatigueScore?.toString().orEmpty()) }
     var hungerScoreText by rememberSaveable(saveKey) { mutableStateOf(todayCheck?.hungerScore?.toString().orEmpty()) }
@@ -1107,6 +1133,14 @@ private fun BodyCompositionCheckCard(
                 )
             }
             OutlinedTextField(
+                value = mainLiftKgText,
+                onValueChange = { mainLiftKgText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("핵심 리프트(kg, 선택)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
+            )
+            OutlinedTextField(
                 value = sleepHoursText,
                 onValueChange = { sleepHoursText = it.filter { ch -> ch.isDigit() || ch == '.' } },
                 modifier = Modifier.fillMaxWidth(),
@@ -1157,6 +1191,7 @@ private fun BodyCompositionCheckCard(
                             bodyWeightText = bodyWeightText,
                             proteinText = proteinText,
                             resistanceSetsText = resistanceSetsText,
+                            mainLiftKgText = mainLiftKgText,
                             sleepHoursText = sleepHoursText,
                             fatigueScoreText = fatigueScoreText,
                             hungerScoreText = hungerScoreText,
@@ -1171,6 +1206,7 @@ private fun BodyCompositionCheckCard(
                         validation.bodyWeightKg,
                         validation.proteinGrams,
                         validation.resistanceSets,
+                        validation.mainLiftKg,
                         validation.sleepHours,
                         validation.fatigueScore,
                         validation.hungerScore,

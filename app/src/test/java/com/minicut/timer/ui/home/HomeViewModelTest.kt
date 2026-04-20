@@ -10,6 +10,7 @@ import com.minicut.timer.domain.model.CalorieRangeStatus
 import com.minicut.timer.domain.model.EntryQuickPreset
 import com.minicut.timer.domain.model.MiniCutPhase
 import com.minicut.timer.domain.model.RecoveryRiskStatus
+import com.minicut.timer.domain.model.StrengthTrendStatus
 import com.minicut.timer.testing.FakeCalorieEntryDao
 import com.minicut.timer.testing.FakeDailyConditionCheckDao
 import com.minicut.timer.testing.FakeMiniCutPlanDao
@@ -273,6 +274,7 @@ class HomeViewModelTest {
                     bodyWeightKg = 80f,
                     proteinGrams = 150,
                     resistanceSets = 8,
+                    mainLiftKg = 100f,
                     updatedAtEpochMillis = LocalDateTime.of(2026, 4, 3, 9, 0)
                         .atZone(ZoneId.systemDefault())
                         .toInstant()
@@ -303,6 +305,7 @@ class HomeViewModelTest {
             bodyWeightKg = 79.2f,
             proteinGrams = 160,
             resistanceSets = 10,
+            mainLiftKg = 105f,
             sleepHours = 7.2f,
             fatigueScore = 2,
             hungerScore = 3,
@@ -315,6 +318,7 @@ class HomeViewModelTest {
         assertEquals(79.2f, dailyConditionDao.lastUpsert?.bodyWeightKg)
         assertEquals(160, dailyConditionDao.lastUpsert?.proteinGrams)
         assertEquals(10, dailyConditionDao.lastUpsert?.resistanceSets)
+        assertEquals(105f, dailyConditionDao.lastUpsert?.mainLiftKg)
         assertEquals(7.2f, dailyConditionDao.lastUpsert?.sleepHours)
         assertEquals(2, dailyConditionDao.lastUpsert?.fatigueScore)
 
@@ -324,6 +328,7 @@ class HomeViewModelTest {
         assertEquals(CalorieAdjustmentDirection.Keep, state.calorieAdjustmentRecommendation.direction)
         assertEquals(1300, state.calorieAdjustmentRecommendation.suggestedTargetKcal)
         assertEquals(RecoveryRiskStatus.Stable, state.recoveryRiskAssessment.status)
+        assertEquals(StrengthTrendStatus.Up, state.strengthTrend.status)
         collectionJob.cancel()
     }
 
@@ -350,6 +355,7 @@ class HomeViewModelTest {
             bodyWeightKg = 0f,
             proteinGrams = 0,
             resistanceSets = 0,
+            mainLiftKg = 0f,
             sleepHours = 0f,
             fatigueScore = 0,
             hungerScore = 0,

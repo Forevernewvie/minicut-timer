@@ -4,6 +4,7 @@ data class ConditionCheckValidationResult(
     val bodyWeightKg: Float? = null,
     val proteinGrams: Int? = null,
     val resistanceSets: Int? = null,
+    val mainLiftKg: Float? = null,
     val sleepHours: Float? = null,
     val fatigueScore: Int? = null,
     val hungerScore: Int? = null,
@@ -19,6 +20,7 @@ fun validateConditionCheckInput(
     bodyWeightText: String,
     proteinText: String,
     resistanceSetsText: String,
+    mainLiftKgText: String,
     sleepHoursText: String,
     fatigueScoreText: String,
     hungerScoreText: String,
@@ -28,6 +30,7 @@ fun validateConditionCheckInput(
     val trimmedWeight = bodyWeightText.trim()
     val trimmedProtein = proteinText.trim()
     val trimmedSets = resistanceSetsText.trim()
+    val trimmedMainLift = mainLiftKgText.trim()
     val trimmedSleepHours = sleepHoursText.trim()
     val trimmedFatigue = fatigueScoreText.trim()
     val trimmedHunger = hungerScoreText.trim()
@@ -56,6 +59,14 @@ fun validateConditionCheckInput(
     }
     if (parsedSets != null && parsedSets <= 0) {
         return ConditionCheckValidationResult(errorMessage = "세트 수는 1 이상으로 입력해주세요.")
+    }
+
+    val parsedMainLift = trimmedMainLift.takeIf { it.isNotBlank() }?.toFloatOrNull()
+    if (trimmedMainLift.isNotBlank() && parsedMainLift == null) {
+        return ConditionCheckValidationResult(errorMessage = "핵심 리프트는 숫자(예: 100)로 입력해주세요.")
+    }
+    if (parsedMainLift != null && parsedMainLift <= 0f) {
+        return ConditionCheckValidationResult(errorMessage = "핵심 리프트는 0보다 큰 값으로 입력해주세요.")
     }
 
     val parsedSleepHours = trimmedSleepHours.takeIf { it.isNotBlank() }?.toFloatOrNull()
@@ -99,9 +110,10 @@ fun validateConditionCheckInput(
     }
 
     val hasAnyValue =
-        parsedWeight != null ||
+            parsedWeight != null ||
             parsedProtein != null ||
             parsedSets != null ||
+            parsedMainLift != null ||
             parsedSleepHours != null ||
             parsedFatigue != null ||
             parsedHunger != null ||
@@ -115,6 +127,7 @@ fun validateConditionCheckInput(
         bodyWeightKg = parsedWeight,
         proteinGrams = parsedProtein,
         resistanceSets = parsedSets,
+        mainLiftKg = parsedMainLift,
         sleepHours = parsedSleepHours,
         fatigueScore = parsedFatigue,
         hungerScore = parsedHunger,

@@ -161,7 +161,77 @@ class MiniCutDatabaseMigrationTest {
     }
 
     @Test
-    fun migrate4To7_preservesPlanRowAndAppliesDefaultsForNewColumns() {
+    fun migrate7To8_addsMainLiftKgColumn() {
+        helper.createDatabase(testDbName, 7).apply {
+            execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `mini_cut_plan` (
+                    `id` INTEGER NOT NULL,
+                    `startDateEpochDay` INTEGER NOT NULL,
+                    `durationWeeks` INTEGER NOT NULL,
+                    `endDateEpochDay` INTEGER NOT NULL,
+                    `dailyTargetKcal` INTEGER NOT NULL,
+                    `goalMode` TEXT NOT NULL,
+                    `activityLevel` TEXT NOT NULL,
+                    `estimatedMaintenanceKcal` INTEGER NOT NULL,
+                    `isActive` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `calorie_entries` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `dateEpochDay` INTEGER NOT NULL,
+                    `calories` INTEGER NOT NULL,
+                    `foodName` TEXT NOT NULL,
+                    `note` TEXT NOT NULL,
+                    `timeLabel` TEXT NOT NULL,
+                    `isFavorite` INTEGER NOT NULL,
+                    `createdAtEpochMillis` INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `daily_condition_checks` (
+                    `dateEpochDay` INTEGER NOT NULL,
+                    `bodyWeightKg` REAL,
+                    `proteinGrams` INTEGER,
+                    `resistanceSets` INTEGER,
+                    `sleepHours` REAL,
+                    `fatigueScore` INTEGER,
+                    `hungerScore` INTEGER,
+                    `moodScore` INTEGER,
+                    `workoutPerformanceScore` INTEGER,
+                    `updatedAtEpochMillis` INTEGER NOT NULL,
+                    PRIMARY KEY(`dateEpochDay`)
+                )
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            testDbName,
+            8,
+            true,
+            MiniCutDatabase.MIGRATION_7_8,
+        ).apply {
+            query("PRAGMA table_info('daily_condition_checks')").use { cursor ->
+                val columns = mutableSetOf<String>()
+                while (cursor.moveToNext()) {
+                    columns += cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                }
+                assertTrue(columns.contains("mainLiftKg"))
+            }
+            close()
+        }
+    }
+
+    @Test
+    fun migrate4To8_preservesPlanRowAndAppliesDefaultsForNewColumns() {
         helper.createDatabase(testDbName, 4).apply {
             execSQL(
                 """
@@ -201,11 +271,12 @@ class MiniCutDatabaseMigrationTest {
 
         helper.runMigrationsAndValidate(
             testDbName,
-            7,
+            8,
             true,
             MiniCutDatabase.MIGRATION_4_5,
             MiniCutDatabase.MIGRATION_5_6,
             MiniCutDatabase.MIGRATION_6_7,
+            MiniCutDatabase.MIGRATION_7_8,
         ).apply {
             query("SELECT goalMode, activityLevel, estimatedMaintenanceKcal, dailyTargetKcal FROM mini_cut_plan WHERE id = 1").use { cursor ->
                 assertTrue(cursor.moveToFirst())

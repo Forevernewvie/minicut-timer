@@ -92,6 +92,7 @@ class EntityMapperTest {
                 bodyWeightKg = 78.6f,
                 proteinGrams = 160,
                 resistanceSets = 12,
+                mainLiftKg = 105f,
                 sleepHours = 7.5f,
                 fatigueScore = 2,
                 hungerScore = 3,
@@ -107,6 +108,7 @@ class EntityMapperTest {
         assertEquals(domain.bodyWeightKg, mappedBack.bodyWeightKg)
         assertEquals(domain.proteinGrams, mappedBack.proteinGrams)
         assertEquals(domain.resistanceSets, mappedBack.resistanceSets)
+        assertEquals(domain.mainLiftKg, mappedBack.mainLiftKg)
         assertEquals(domain.sleepHours, mappedBack.sleepHours)
         assertEquals(domain.fatigueScore, mappedBack.fatigueScore)
         assertEquals(domain.hungerScore, mappedBack.hungerScore)
