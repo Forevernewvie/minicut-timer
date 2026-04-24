@@ -9,6 +9,8 @@ android {
     namespace = "com.minicut.timer"
     compileSdk = 36
 
+    sourceSets["androidTest"].assets.srcDir("$projectDir/schemas")
+
     defaultConfig {
         applicationId = "com.minicut.timer"
         minSdk = 26
@@ -51,6 +53,10 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {

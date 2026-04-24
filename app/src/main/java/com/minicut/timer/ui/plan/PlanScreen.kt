@@ -5,6 +5,8 @@ import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -96,7 +98,6 @@ fun PlanScreen(
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
-
     var startDate by rememberSaveable { mutableStateOf(LocalDate.now()) }
     var durationWeeks by rememberSaveable { mutableIntStateOf(4) }
     var dailyTargetKcal by rememberSaveable { mutableIntStateOf(MiniCutRules.DEFAULT_TARGET_KCAL) }
@@ -109,6 +110,17 @@ fun PlanScreen(
     var showDataResetDialog by rememberSaveable { mutableStateOf(false) }
     var inlineFeedbackMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var inlineFeedbackTone by rememberSaveable { mutableStateOf(MiniCutInlineFeedbackTone.Info) }
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                syncMiniCutNotifications(context, notificationSettings)
+                inlineFeedbackTone = MiniCutInlineFeedbackTone.Info
+                inlineFeedbackMessage = "알림 권한을 허용했어요. 저장된 리마인더를 다시 동기화합니다."
+            } else {
+                inlineFeedbackTone = MiniCutInlineFeedbackTone.Caution
+                inlineFeedbackMessage = "알림 권한이 없으면 리마인더가 표시되지 않을 수 있어요."
+            }
+        }
 
     LaunchedEffect(existingPlan) {
         existingPlan?.let {
@@ -483,6 +495,15 @@ fun PlanScreen(
                     TargetGuidanceCard(guidance = targetGuidance)
                 }
                 item {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationPermissionGranted) {
+                        NotificationPermissionPromptCard(
+                            onRequestPermission = {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            },
+                        )
+                    }
+                }
+                item {
                     NotificationSettingsCard(
                         settings = notificationSettings,
                         notificationPermissionGranted = notificationPermissionGranted,
@@ -500,6 +521,32 @@ fun PlanScreen(
                         onClearAllClick = { showDataResetDialog = true },
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationPermissionPromptCard(
+    onRequestPermission: () -> Unit,
+) {
+    Card(
+        shape = MiniCutCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.2f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("알림 권한 확인", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                "Android 13 이상에서는 리마인더를 받으려면 알림 권한을 한 번 허용해야 해요.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(onClick = onRequestPermission) {
+                Text("알림 권한 허용")
             }
         }
     }

@@ -3,6 +3,7 @@ package com.minicut.timer
 import android.app.Application
 import com.minicut.timer.data.AppContainer
 import com.minicut.timer.notifications.createMiniCutNotificationChannel
+import com.minicut.timer.util.MiniCutDiagnostics
 import com.google.android.gms.ads.MobileAds
 
 class MiniCutApplication : Application() {
@@ -13,6 +14,8 @@ class MiniCutApplication : Application() {
         super.onCreate()
         container = AppContainer(this)
         createMiniCutNotificationChannel(this)
-        MobileAds.initialize(this)
+        MiniCutDiagnostics.guard("MiniCutApplication.initializeMobileAds") {
+            MobileAds.initialize(this)
+        }
     }
 }

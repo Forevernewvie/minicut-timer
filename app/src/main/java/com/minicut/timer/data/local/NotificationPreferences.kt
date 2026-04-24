@@ -20,27 +20,24 @@ object NotificationPreferences {
     fun load(context: Context): NotificationSettings {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return NotificationSettings(
-            cadence =
-                prefs.getString(KEY_CADENCE, ReminderCadence.Daily.name)
-                    ?.let { name -> ReminderCadence.entries.firstOrNull { it.name == name } }
-                    ?: ReminderCadence.Daily,
+            cadence = sanitizeCadence(prefs.getString(KEY_CADENCE, ReminderCadence.Daily.name)),
             morning =
                 ReminderSetting(
                     enabled = prefs.getBoolean(KEY_MORNING_ENABLED, true),
-                    time =
-                        ReminderTime(
-                            hourOfDay = prefs.getInt(KEY_MORNING_HOUR, ReminderSlot.Morning.defaultTime.hourOfDay),
-                            minute = prefs.getInt(KEY_MORNING_MINUTE, ReminderSlot.Morning.defaultTime.minute),
-                        ),
+                    time = sanitizeReminderTime(
+                        hourOfDay = prefs.getInt(KEY_MORNING_HOUR, ReminderSlot.Morning.defaultTime.hourOfDay),
+                        minute = prefs.getInt(KEY_MORNING_MINUTE, ReminderSlot.Morning.defaultTime.minute),
+                        defaultTime = ReminderSlot.Morning.defaultTime,
+                    ),
                 ),
             evening =
                 ReminderSetting(
                     enabled = prefs.getBoolean(KEY_EVENING_ENABLED, true),
-                    time =
-                        ReminderTime(
-                            hourOfDay = prefs.getInt(KEY_EVENING_HOUR, ReminderSlot.Evening.defaultTime.hourOfDay),
-                            minute = prefs.getInt(KEY_EVENING_MINUTE, ReminderSlot.Evening.defaultTime.minute),
-                        ),
+                    time = sanitizeReminderTime(
+                        hourOfDay = prefs.getInt(KEY_EVENING_HOUR, ReminderSlot.Evening.defaultTime.hourOfDay),
+                        minute = prefs.getInt(KEY_EVENING_MINUTE, ReminderSlot.Evening.defaultTime.minute),
+                        defaultTime = ReminderSlot.Evening.defaultTime,
+                    ),
                 ),
         )
     }
@@ -61,3 +58,20 @@ object NotificationPreferences {
             .apply()
     }
 }
+
+internal fun sanitizeCadence(name: String?): ReminderCadence =
+    name
+        ?.let { stored -> ReminderCadence.entries.firstOrNull { it.name == stored } }
+        ?: ReminderCadence.Daily
+
+internal fun sanitizeReminderTime(
+    hourOfDay: Int,
+    minute: Int,
+    defaultTime: ReminderTime,
+): ReminderTime =
+    runCatching {
+        ReminderTime(
+            hourOfDay = hourOfDay,
+            minute = minute,
+        )
+    }.getOrDefault(defaultTime)

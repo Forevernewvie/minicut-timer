@@ -14,7 +14,7 @@ import com.minicut.timer.data.local.entity.MiniCutPlanEntity
 @Database(
     entities = [MiniCutPlanEntity::class, CalorieEntryEntity::class, DailyConditionCheckEntity::class],
     version = 9,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class MiniCutDatabase : RoomDatabase() {
     abstract fun planDao(): MiniCutPlanDao

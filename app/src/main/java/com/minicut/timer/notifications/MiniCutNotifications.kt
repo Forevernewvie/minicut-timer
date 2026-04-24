@@ -14,6 +14,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.minicut.timer.MainActivity
 import com.minicut.timer.R
 import com.minicut.timer.data.local.NotificationPreferences
+import com.minicut.timer.util.MiniCutDiagnostics
 import java.time.ZonedDateTime
 
 private const val CHANNEL_ID = "minicut_encouragements"
@@ -22,18 +23,22 @@ private const val CHANNEL_DESCRIPTION = "미니컷 진행을 위한 오전/저�
 private const val EXTRA_SLOT = "slot"
 
 fun createMiniCutNotificationChannel(context: Context) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    MiniCutDiagnostics.guard("MiniCutNotifications.createChannel") {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return@guard
 
-    val manager = context.getSystemService(NotificationManager::class.java)
-    val channel =
-        NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description = CHANNEL_DESCRIPTION
-        }
-    manager.createNotificationChannel(channel)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val channel =
+            NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = CHANNEL_DESCRIPTION
+            }
+        manager.createNotificationChannel(channel)
+    }
 }
 
 fun scheduleMiniCutNotifications(context: Context) {
-    syncMiniCutNotifications(context)
+    MiniCutDiagnostics.guard("MiniCutNotifications.schedule") {
+        syncMiniCutNotifications(context)
+    }
 }
 
 fun syncMiniCutNotifications(
@@ -114,57 +119,61 @@ internal fun nextTriggerMillis(
 
 class MiniCutNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val slotName = intent.getStringExtra(EXTRA_SLOT) ?: return
-        val slot = ReminderSlot.entries.firstOrNull { it.name == slotName } ?: return
-        val settings = NotificationPreferences.load(context)
-        val slotSetting = settings.settingFor(slot)
-        val now = ZonedDateTime.now()
+        MiniCutDiagnostics.guard("MiniCutNotificationReceiver.onReceive") {
+            val slotName = intent.getStringExtra(EXTRA_SLOT) ?: return@guard
+            val slot = ReminderSlot.entries.firstOrNull { it.name == slotName } ?: return@guard
+            val settings = NotificationPreferences.load(context)
+            val slotSetting = settings.settingFor(slot)
+            val now = ZonedDateTime.now()
 
-        if (!slotSetting.enabled ||
-            (settings.cadence == ReminderCadence.Weekdays && now.dayOfWeek.isWeekend())
-        ) {
+            if (!slotSetting.enabled ||
+                (settings.cadence == ReminderCadence.Weekdays && now.dayOfWeek.isWeekend())
+            ) {
+                syncMiniCutNotifications(context, settings)
+                return@guard
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                syncMiniCutNotifications(context, settings)
+                return@guard
+            }
+
+            val message = slot.messages[now.dayOfMonth % slot.messages.size]
+            val notification =
+                NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle(slot.title)
+                    .setContentText(message)
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+                    .setContentIntent(
+                        PendingIntent.getActivity(
+                            context,
+                            slot.requestCode,
+                            Intent(context, MainActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            },
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                        ),
+                    )
+                    .setAutoCancel(true)
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .build()
+
+            NotificationManagerCompat.from(context).notify(slot.requestCode, notification)
             syncMiniCutNotifications(context, settings)
-            return
         }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
-            android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) {
-            syncMiniCutNotifications(context, settings)
-            return
-        }
-
-        val message = slot.messages[now.dayOfMonth % slot.messages.size]
-        val notification =
-            NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle(slot.title)
-                .setContentText(message)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-                .setContentIntent(
-                    PendingIntent.getActivity(
-                        context,
-                        slot.requestCode,
-                        Intent(context, MainActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        },
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                    ),
-                )
-                .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .build()
-
-        NotificationManagerCompat.from(context).notify(slot.requestCode, notification)
-        syncMiniCutNotifications(context, settings)
     }
 }
 
 class MiniCutBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-            syncMiniCutNotifications(context)
+        MiniCutDiagnostics.guard("MiniCutBootReceiver.onReceive") {
+            if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+                syncMiniCutNotifications(context)
+            }
         }
     }
 }
