@@ -6,8 +6,12 @@ import com.minicut.timer.data.local.entity.CalorieEntryEntity
 import com.minicut.timer.data.local.entity.MiniCutPlanEntity
 import com.minicut.timer.data.local.query.DailyCalorieSummaryRow
 import com.minicut.timer.domain.model.CalorieEntry
+import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.EntryQuickPreset
+import com.minicut.timer.domain.model.ActivityLevel
+import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.testing.FakeCalorieEntryDao
+import com.minicut.timer.testing.FakeDailyConditionCheckDao
 import com.minicut.timer.testing.FakeMiniCutPlanDao
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -26,10 +30,17 @@ class MiniCutRepositoryTest {
     @Test
     fun savePlan_persistsCalculatedInclusiveEndDate() = runTest {
         val planDao = FakeMiniCutPlanDao()
-        val repository = MiniCutRepository(planDao, FakeCalorieEntryDao())
+        val repository = MiniCutRepository(planDao, FakeCalorieEntryDao(), FakeDailyConditionCheckDao())
 
         val startDate = LocalDate.of(2026, 4, 10)
-        repository.savePlan(startDate, durationWeeks = 4, dailyTargetKcal = 1300)
+        repository.savePlan(
+            startDate = startDate,
+            durationWeeks = 4,
+            dailyTargetKcal = 1300,
+            goalMode = MiniCutGoalMode.EventReady,
+            activityLevel = ActivityLevel.High,
+            estimatedMaintenanceKcal = 2500,
+        )
 
         val saved = planDao.lastUpsert
         assertNotNull(saved)
@@ -37,13 +48,16 @@ class MiniCutRepositoryTest {
         assertEquals(4, saved?.durationWeeks)
         assertEquals(LocalDate.of(2026, 5, 7).toEpochDay(), saved?.endDateEpochDay)
         assertEquals(1300, saved?.dailyTargetKcal)
+        assertEquals(MiniCutGoalMode.EventReady.name, saved?.goalMode)
+        assertEquals(ActivityLevel.High.name, saved?.activityLevel)
+        assertEquals(2500, saved?.estimatedMaintenanceKcal)
         assertEquals(true, saved?.isActive)
     }
 
     @Test
     fun savePlan_rejectsTargetOutsideRecommendedRange() = runTest {
         val planDao = FakeMiniCutPlanDao()
-        val repository = MiniCutRepository(planDao, FakeCalorieEntryDao())
+        val repository = MiniCutRepository(planDao, FakeCalorieEntryDao(), FakeDailyConditionCheckDao())
 
         try {
             repository.savePlan(
@@ -62,7 +76,7 @@ class MiniCutRepositoryTest {
     @Test
     fun addEntry_trimsUserInputBeforePersisting() = runTest {
         val calorieDao = FakeCalorieEntryDao()
-        val repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao)
+        val repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao, FakeDailyConditionCheckDao())
         val date = LocalDate.of(2026, 4, 10)
 
         repository.addEntry(
@@ -86,7 +100,7 @@ class MiniCutRepositoryTest {
     @Test
     fun updateEntry_preservesIdentityAndAppliesTrimmedValues() = runTest {
         val calorieDao = FakeCalorieEntryDao()
-        val repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao)
+        val repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao, FakeDailyConditionCheckDao())
         val existing =
             CalorieEntry(
                 id = 7L,
@@ -123,7 +137,7 @@ class MiniCutRepositoryTest {
     @Test
     fun observePlan_mapsEntityToDomainModel() = runTest {
         val planDao = FakeMiniCutPlanDao()
-        val repository = MiniCutRepository(planDao, FakeCalorieEntryDao())
+        val repository = MiniCutRepository(planDao, FakeCalorieEntryDao(), FakeDailyConditionCheckDao())
 
         planDao.planFlow.value =
             MiniCutPlanEntity(
@@ -144,7 +158,7 @@ class MiniCutRepositoryTest {
     @Test
     fun observeEntryAndSummaryFlows_mapDataForFeatureScreens() = runTest {
         val calorieDao = FakeCalorieEntryDao()
-        val repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao)
+        val repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao, FakeDailyConditionCheckDao())
         val date = LocalDate.of(2026, 4, 10)
 
         calorieDao.seedEntries(
@@ -195,7 +209,7 @@ class MiniCutRepositoryTest {
     @Test
     fun deleteEntry_forwardsIdToDao() = runTest {
         val calorieDao = FakeCalorieEntryDao()
-        val repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao)
+        val repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao, FakeDailyConditionCheckDao())
 
         repository.deleteEntry(99L)
 
@@ -206,18 +220,20 @@ class MiniCutRepositoryTest {
     fun clearAllSavedData_clearsEntriesAndPlanTogether() = runTest {
         val planDao = FakeMiniCutPlanDao()
         val calorieDao = FakeCalorieEntryDao()
-        val repository = MiniCutRepository(planDao, calorieDao)
+        val dailyConditionDao = FakeDailyConditionCheckDao()
+        val repository = MiniCutRepository(planDao, calorieDao, dailyConditionDao)
 
         repository.clearAllSavedData()
 
         assertEquals(1, calorieDao.deleteAllCalls)
+        assertEquals(1, dailyConditionDao.deleteAllCalls)
         assertEquals(1, planDao.deletePlanCalls)
     }
 
     @Test
     fun observeRecentAndFavoritePresets_returnDeduplicatedRows() = runTest {
         val calorieDao = FakeCalorieEntryDao()
-        val repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao)
+        val repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao, FakeDailyConditionCheckDao())
         val today = LocalDate.of(2026, 4, 10)
 
         calorieDao.seedEntries(
@@ -277,7 +293,7 @@ class MiniCutRepositoryTest {
     @Test
     fun addEntryFromPresetAndUpdateFavorite_delegateToDao() = runTest {
         val calorieDao = FakeCalorieEntryDao()
-        val repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao)
+        val repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao, FakeDailyConditionCheckDao())
         val today = LocalDate.of(2026, 4, 10)
 
         repository.addEntryFromPreset(
@@ -298,5 +314,67 @@ class MiniCutRepositoryTest {
         assertEquals("운동 전", calorieDao.lastInserted?.note)
         assertEquals("오전", calorieDao.lastInserted?.timeLabel)
         assertEquals(5L to true, calorieDao.lastFavoriteUpdate)
+    }
+
+    @Test
+    fun upsertDailyConditionCheck_andObserveInRange_workAsExpected() = runTest {
+        val date = LocalDate.of(2026, 4, 10)
+        val dailyConditionDao = FakeDailyConditionCheckDao()
+        val repository = MiniCutRepository(FakeMiniCutPlanDao(), FakeCalorieEntryDao(), dailyConditionDao)
+
+        repository.upsertDailyConditionCheck(
+            date = date,
+            bodyWeightKg = 78.4f,
+            proteinGrams = 160,
+            resistanceSets = 12,
+            mainLiftKg = 105f,
+            relapseTrigger = "스트레스",
+            copingAction = "산책",
+            sleepHours = 7.0f,
+            fatigueScore = 2,
+            hungerScore = 3,
+            moodScore = 4,
+            workoutPerformanceScore = 4,
+        )
+
+        val oneDay = repository.observeDailyConditionCheck(date).first()
+        val range = repository.observeDailyConditionChecks(date.minusDays(1), date.plusDays(1)).first()
+
+        assertEquals(78.4f, oneDay?.bodyWeightKg)
+        assertEquals(160, oneDay?.proteinGrams)
+        assertEquals(12, oneDay?.resistanceSets)
+        assertEquals(105f, oneDay?.mainLiftKg)
+        assertEquals("스트레스", oneDay?.relapseTrigger)
+        assertEquals("산책", oneDay?.copingAction)
+        assertEquals(7.0f, oneDay?.sleepHours)
+        assertEquals(2, oneDay?.fatigueScore)
+        assertEquals(1, range.size)
+        assertEquals(date, range.first().date)
+    }
+
+    @Test
+    fun upsertDailyConditionCheck_ignoresNonPositiveOnlyInput() = runTest {
+        val date = LocalDate.of(2026, 4, 10)
+        val dailyConditionDao = FakeDailyConditionCheckDao()
+        val repository = MiniCutRepository(FakeMiniCutPlanDao(), FakeCalorieEntryDao(), dailyConditionDao)
+
+        repository.upsertDailyConditionCheck(
+            date = date,
+            bodyWeightKg = 0f,
+            proteinGrams = 0,
+            resistanceSets = 0,
+            mainLiftKg = 0f,
+            relapseTrigger = null,
+            copingAction = null,
+            sleepHours = 0f,
+            fatigueScore = 0,
+            hungerScore = 0,
+            moodScore = 0,
+            workoutPerformanceScore = 0,
+        )
+
+        val observed = repository.observeDailyConditionCheck(date).first()
+        assertEquals(null, observed)
+        assertEquals(null, dailyConditionDao.lastUpsert)
     }
 }

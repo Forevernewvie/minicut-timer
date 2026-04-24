@@ -8,8 +8,43 @@ data class MiniCutPlan(
     val durationWeeks: Int,
     val endDate: LocalDate,
     val dailyTargetKcal: Int,
+    val goalMode: MiniCutGoalMode = MiniCutGoalMode.MassReset,
+    val activityLevel: ActivityLevel = ActivityLevel.Moderate,
+    val estimatedMaintenanceKcal: Int = 0,
     val isActive: Boolean = true,
 )
+
+enum class ActivityLevel(
+    val displayName: String,
+    val kcalPerKgFactor: Float,
+) {
+    Low(
+        displayName = "낮음(좌식 위주)",
+        kcalPerKgFactor = 28f,
+    ),
+    Moderate(
+        displayName = "보통(주 3~4회 활동)",
+        kcalPerKgFactor = 31f,
+    ),
+    High(
+        displayName = "높음(주 5회+ 훈련)",
+        kcalPerKgFactor = 34f,
+    ),
+}
+
+enum class MiniCutGoalMode(
+    val displayName: String,
+    val shortDescription: String,
+) {
+    MassReset(
+        displayName = "매스업 리셋",
+        shortDescription = "다음 벌크업 효율 회복",
+    ),
+    EventReady(
+        displayName = "단기 외형 개선",
+        shortDescription = "촬영·휴가 등 이벤트 대비",
+    ),
+}
 
 data class CalorieEntry(
     val id: Long = 0L,
@@ -68,4 +103,137 @@ data class TargetGuidance(
     val body: String,
     val footnote: String,
     val tone: TargetGuidanceTone,
+)
+
+data class ReverseDietStep(
+    val weekLabel: String,
+    val targetCalories: Int,
+    val note: String,
+)
+
+data class ReverseDietPlan(
+    val title: String,
+    val summary: String,
+    val caution: String,
+    val steps: List<ReverseDietStep>,
+)
+
+data class DailyConditionCheck(
+    val date: LocalDate,
+    val bodyWeightKg: Float? = null,
+    val proteinGrams: Int? = null,
+    val resistanceSets: Int? = null,
+    val mainLiftKg: Float? = null,
+    val relapseTrigger: String? = null,
+    val copingAction: String? = null,
+    val sleepHours: Float? = null,
+    val fatigueScore: Int? = null,
+    val hungerScore: Int? = null,
+    val moodScore: Int? = null,
+    val workoutPerformanceScore: Int? = null,
+    val updatedAt: LocalDateTime,
+)
+
+enum class StrengthTrendStatus {
+    NoData,
+    Up,
+    Stable,
+    Down,
+}
+
+data class StrengthTrend(
+    val status: StrengthTrendStatus = StrengthTrendStatus.NoData,
+    val changePercent: Float? = null,
+    val message: String = "핵심 리프트 기록이 쌓이면 주간 근력 추세를 분석해요.",
+)
+
+data class RelapsePreventionInsight(
+    val recurringTrigger: String? = null,
+    val recommendedAction: String? = null,
+    val triggerCount: Int = 0,
+    val message: String = "트리거를 기록하면 반복 패턴과 대응 루틴을 제안해요.",
+)
+
+enum class WeeklyWeightTrendStatus {
+    NoData,
+    TooSlow,
+    InRange,
+    TooFast,
+    GainOrStall,
+}
+
+data class WeeklyWeightTrend(
+    val status: WeeklyWeightTrendStatus = WeeklyWeightTrendStatus.NoData,
+    val ratePercentPerWeek: Float? = null,
+    val message: String = "체중 기록이 2회 이상 쌓이면 주간 감량 속도를 계산할 수 있어요.",
+)
+
+enum class CalorieAdjustmentDirection {
+    Keep,
+    Increase,
+    Decrease,
+}
+
+data class CalorieAdjustmentRecommendation(
+    val currentTargetKcal: Int,
+    val suggestedTargetKcal: Int,
+    val direction: CalorieAdjustmentDirection,
+    val deltaKcal: Int,
+    val title: String,
+    val message: String,
+    val actionable: Boolean,
+)
+
+enum class DeficitRiskLevel {
+    Unknown,
+    Safe,
+    Caution,
+    High,
+}
+
+data class DeficitGuardrail(
+    val maintenanceKcal: Int? = null,
+    val deficitKcal: Int? = null,
+    val deficitPercent: Float? = null,
+    val level: DeficitRiskLevel = DeficitRiskLevel.Unknown,
+    val title: String = "유지 칼로리 정보가 더 필요해요",
+    val message: String = "체중과 활동 수준을 입력하면 결핍 강도를 안전 범위로 안내해드릴게요.",
+    val canSave: Boolean = true,
+)
+
+enum class RecoveryRiskStatus {
+    NoData,
+    Stable,
+    Watch,
+    High,
+}
+
+data class RecoveryRiskAssessment(
+    val status: RecoveryRiskStatus = RecoveryRiskStatus.NoData,
+    val flaggedDays: Int = 0,
+    val message: String = "수면·피로·허기 체크가 쌓이면 회복 리스크를 자동 분석해요.",
+    val suggestDietBreak: Boolean = false,
+)
+
+enum class LeanMassProtectionGrade {
+    NoData,
+    Low,
+    Moderate,
+    Good,
+    Excellent,
+}
+
+data class LeanMassProtectionScore(
+    val score: Int = 0,
+    val grade: LeanMassProtectionGrade = LeanMassProtectionGrade.NoData,
+    val message: String = "단백질/훈련 체크가 쌓이면 근손실 방어 점수를 계산해요.",
+    val proteinHitDays: Int = 0,
+    val resistanceHitDays: Int = 0,
+)
+
+data class DietBreakRecommendation(
+    val shouldSuggest: Boolean = false,
+    val suggestedDays: Int = 0,
+    val title: String = "다이어트 브레이크 불필요",
+    val message: String = "현재는 계획한 감량 리듬을 유지해도 괜찮아요.",
 )

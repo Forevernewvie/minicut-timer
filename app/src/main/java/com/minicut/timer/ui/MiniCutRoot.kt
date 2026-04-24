@@ -21,10 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.ui.calendar.CalendarScreen
 import com.minicut.timer.ui.components.AdMobBanner
 import com.minicut.timer.ui.home.HomeScreen
@@ -76,7 +79,11 @@ fun MiniCutRoot() {
                         containerColor = MaterialTheme.colorScheme.surface,
                     ) {
                         Destination.entries.forEach { destination ->
-                            val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
+                            val selected =
+                                currentDestination?.hierarchy?.any { routeDestination ->
+                                    val route = routeDestination.route
+                                    route == destination.route || route?.startsWith("${destination.route}?") == true
+                                } == true
                             NavigationBarItem(
                                 selected = selected,
                                 onClick = {
@@ -121,13 +128,37 @@ fun MiniCutRoot() {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(Destination.Home.route) {
-                HomeScreen(onOpenPlan = { navController.navigate(Destination.Plan.route) })
+                HomeScreen(
+                    onOpenPlan = { suggestedTargetKcal ->
+                        val route =
+                            suggestedTargetKcal?.takeIf { it in MiniCutRules.TARGET_OPTIONS_KCAL }
+                                ?.let { Destination.planRouteWithSuggestedTarget(it) }
+                                ?: Destination.Plan.route
+                        navController.navigate(route)
+                    },
+                )
             }
             composable(Destination.Calendar.route) {
                 CalendarScreen()
             }
-            composable(Destination.Plan.route) {
-                PlanScreen(onSaved = { navController.navigate(Destination.Home.route) })
+            composable(
+                route = Destination.PLAN_ROUTE_PATTERN,
+                arguments =
+                    listOf(
+                        navArgument(Destination.PLAN_SUGGESTED_TARGET_ARG) {
+                            type = NavType.IntType
+                            defaultValue = Destination.PLAN_SUGGESTED_TARGET_NONE
+                        },
+                    ),
+            ) { backStackEntry ->
+                val suggestedTarget =
+                    backStackEntry.arguments
+                        ?.getInt(Destination.PLAN_SUGGESTED_TARGET_ARG)
+                        ?.takeIf { it != Destination.PLAN_SUGGESTED_TARGET_NONE }
+                PlanScreen(
+                    onSaved = { navController.navigate(Destination.Home.route) },
+                    suggestedTargetKcal = suggestedTarget,
+                )
             }
         }
     }

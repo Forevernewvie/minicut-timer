@@ -9,6 +9,8 @@ android {
     namespace = "com.minicut.timer"
     compileSdk = 36
 
+    sourceSets["androidTest"].assets.srcDir("$projectDir/schemas")
+
     defaultConfig {
         applicationId = "com.minicut.timer"
         minSdk = 26
@@ -53,6 +55,10 @@ android {
     }
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.03.01")
 
@@ -86,6 +92,7 @@ dependencies {
 
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    androidTestImplementation("androidx.room:room-testing:2.8.4")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

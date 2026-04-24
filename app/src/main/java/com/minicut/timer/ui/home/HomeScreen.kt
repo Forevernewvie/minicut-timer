@@ -1,9 +1,5 @@
 package com.minicut.timer.ui.home
 
-import android.Manifest
-import android.app.TimePickerDialog
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -66,7 +62,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -81,22 +76,17 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.minicut.timer.data.local.NotificationPreferences
 import com.minicut.timer.domain.model.CalorieEntry
+import com.minicut.timer.domain.model.CalorieAdjustmentDirection
 import com.minicut.timer.domain.model.CalorieRangeStatus
+import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.EntryQuickPreset
+import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
 import com.minicut.timer.domain.model.WeeklyAdherenceReport
 import com.minicut.timer.domain.rules.MiniCutRules
-import com.minicut.timer.notifications.NotificationSettings
-import com.minicut.timer.notifications.ReminderCadence
-import com.minicut.timer.notifications.ReminderSetting
-import com.minicut.timer.notifications.ReminderSlot
-import com.minicut.timer.notifications.ReminderTime
-import com.minicut.timer.notifications.syncMiniCutNotifications
 import com.minicut.timer.ui.components.MiniCutBackdrop
 import com.minicut.timer.ui.components.MiniCutCardShape
 import com.minicut.timer.ui.components.MiniCutMetricTile
@@ -115,7 +105,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onOpenPlan: () -> Unit,
+    onOpenPlan: (Int?) -> Unit,
 ) {
     val context = LocalContext.current
     val repository = context.miniCutRepository
@@ -125,12 +115,6 @@ fun HomeScreen(
     var showEntrySheet by rememberSaveable { mutableStateOf(false) }
     var editingEntry by remember { mutableStateOf<CalorieEntry?>(null) }
     var maintenanceChecks by rememberSaveable { mutableStateOf(setOf<Int>()) }
-    var notificationSettings by remember { mutableStateOf(NotificationPreferences.load(context)) }
-    val notificationPermissionGranted =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
-    val dialogButtonColor = MaterialTheme.colorScheme.primary.toArgb()
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
 
@@ -138,32 +122,6 @@ fun HomeScreen(
         snackbarScope.launch {
             snackbarHostState.showSnackbar(message)
         }
-    }
-
-    fun persistNotificationSettings(updated: NotificationSettings) {
-        notificationSettings = updated
-        NotificationPreferences.save(context, updated)
-        syncMiniCutNotifications(context, updated)
-    }
-
-    fun openReminderTimePicker(slot: ReminderSlot) {
-        val currentTime = notificationSettings.settingFor(slot).time
-        TimePickerDialog(
-            context,
-            { _, hourOfDay, minute ->
-                persistNotificationSettings(
-                    notificationSettings.updateSlot(slot) { it.copy(time = ReminderTime(hourOfDay = hourOfDay, minute = minute)) },
-                )
-            },
-            currentTime.hourOfDay,
-            currentTime.minute,
-            true,
-        ).apply {
-            setOnShowListener {
-                getButton(TimePickerDialog.BUTTON_POSITIVE)?.setTextColor(dialogButtonColor)
-                getButton(TimePickerDialog.BUTTON_NEGATIVE)?.setTextColor(dialogButtonColor)
-            }
-        }.show()
     }
 
     MiniCutBackdrop {
@@ -200,25 +158,29 @@ fun HomeScreen(
                 item {
                     val plan = uiState.plan
                     if (plan == null) {
-                        EmptyPlanHero(onOpenPlan = onOpenPlan)
+                        EmptyPlanHero(onOpenPlan = { onOpenPlan(null) })
                     } else {
                         PlanOverviewCard(
                             startDate = plan.startDate.asCompactDate(),
                             endDate = plan.endDate.asCompactDate(),
                             durationWeeks = plan.durationWeeks,
                             dailyTargetKcal = plan.dailyTargetKcal,
+                            goalMode = plan.goalMode,
                             phase = uiState.planPhase ?: MiniCutRules.phaseOf(plan.startDate, plan.endDate, today),
                             progress = MiniCutRules.calculateProgress(plan.startDate, plan.endDate, today),
                             remainingDays = MiniCutRules.remainingDays(plan.startDate, plan.endDate, today),
                             daysUntilStart = ChronoUnit.DAYS.between(today, plan.startDate).toInt(),
-                            onOpenPlan = onOpenPlan,
+                            onOpenPlan = { onOpenPlan(null) },
                         )
                     }
                 }
-                if (uiState.planPhase == MiniCutPhase.Completed) {
+                val completedPlan = uiState.plan
+                if (uiState.planPhase == MiniCutPhase.Completed && completedPlan != null) {
                     item {
                         MaintenanceModeCard(
                             checkedSteps = maintenanceChecks,
+                            dailyTargetKcal = completedPlan.dailyTargetKcal,
+                            goalMode = completedPlan.goalMode,
                             onToggleStep = { step ->
                                 maintenanceChecks =
                                     if (step in maintenanceChecks) {
@@ -227,7 +189,7 @@ fun HomeScreen(
                                         maintenanceChecks + step
                                     }
                             },
-                            onOpenPlan = onOpenPlan,
+                            onOpenPlan = { onOpenPlan(null) },
                         )
                     }
                 }
@@ -238,16 +200,39 @@ fun HomeScreen(
                     )
                 }
                 item {
-                    NotificationSettingsCard(
-                        settings = notificationSettings,
-                        notificationPermissionGranted = notificationPermissionGranted,
-                        onCadenceChange = { cadence ->
-                            persistNotificationSettings(notificationSettings.copy(cadence = cadence))
+                    BodyCompositionCheckCard(
+                        todayCheck = uiState.todayConditionCheck,
+                        weeklyWeightTrend = uiState.weeklyWeightTrend,
+                        recoveryRiskAssessment = uiState.recoveryRiskAssessment,
+                        recommendedProteinGrams = uiState.recommendedProteinGrams,
+                        calorieAdjustmentRecommendation = uiState.calorieAdjustmentRecommendation,
+                        onOpenPlan = { suggestedTargetKcal -> onOpenPlan(suggestedTargetKcal) },
+                        onSave = { bodyWeightKg, proteinGrams, resistanceSets, mainLiftKg, relapseTrigger, copingAction, sleepHours, fatigueScore, hungerScore, moodScore, workoutPerformanceScore ->
+                            viewModel.saveDailyConditionCheck(
+                                bodyWeightKg = bodyWeightKg,
+                                proteinGrams = proteinGrams,
+                                resistanceSets = resistanceSets,
+                                mainLiftKg = mainLiftKg,
+                                relapseTrigger = relapseTrigger,
+                                copingAction = copingAction,
+                                sleepHours = sleepHours,
+                                fatigueScore = fatigueScore,
+                                hungerScore = hungerScore,
+                                moodScore = moodScore,
+                                workoutPerformanceScore = workoutPerformanceScore,
+                            )
+                            showMessage("코칭 체크인을 저장했어요")
                         },
-                        onToggleSlot = { slot, enabled ->
-                            persistNotificationSettings(notificationSettings.updateSlot(slot) { it.copy(enabled = enabled) })
-                        },
-                        onEditTime = ::openReminderTimePicker,
+                        onInvalidInput = ::showMessage,
+                    )
+                }
+                item {
+                    LeanMassProtectionCard(
+                        score = uiState.leanMassProtectionScore,
+                        strengthTrend = uiState.strengthTrend,
+                        relapsePreventionInsight = uiState.relapsePreventionInsight,
+                        dietBreakRecommendation = uiState.dietBreakRecommendation,
+                        onOpenPlan = { onOpenPlan(null) },
                     )
                 }
                 item {
@@ -458,6 +443,7 @@ private fun PlanOverviewCard(
     endDate: String,
     durationWeeks: Int,
     dailyTargetKcal: Int,
+    goalMode: MiniCutGoalMode,
     phase: MiniCutPhase,
     progress: Float,
     remainingDays: Int,
@@ -514,6 +500,11 @@ private fun PlanOverviewCard(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
             )
+            Text(
+                "플랜 목적 ${goalMode.displayName} · ${goalMode.shortDescription}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MiniCutMetricTile(
                     modifier = Modifier.weight(1f),
@@ -559,144 +550,21 @@ private fun PlanOverviewCard(
     }
 }
 
-@Composable
-private fun NotificationSettingsCard(
-    settings: NotificationSettings,
-    notificationPermissionGranted: Boolean,
-    onCadenceChange: (ReminderCadence) -> Unit,
-    onToggleSlot: (ReminderSlot, Boolean) -> Unit,
-    onEditTime: (ReminderSlot) -> Unit,
-) {
-    Card(
-        shape = MiniCutCardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    "리마인더 설정",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    "아침/저녁 체크인과 반복 요일을 내 생활 리듬에 맞게 조정하세요.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ReminderCadence.entries.forEach { cadence ->
-                    val selected = settings.cadence == cadence
-                    if (selected) {
-                        FilledTonalButton(
-                            onClick = { onCadenceChange(cadence) },
-                            modifier = Modifier.semantics {
-                                this.selected = true
-                                contentDescription = "${cadence.displayName} 선택됨"
-                            },
-                        ) {
-                            Text(cadence.displayName)
-                        }
-                    } else {
-                        OutlinedButton(
-                            onClick = { onCadenceChange(cadence) },
-                            modifier = Modifier.semantics {
-                                this.selected = false
-                                contentDescription = "${cadence.displayName} 선택 안 됨"
-                            },
-                        ) {
-                            Text(cadence.displayName)
-                        }
-                    }
-                }
-            }
-            ReminderSettingRow(
-                slot = ReminderSlot.Morning,
-                setting = settings.morning,
-                onToggle = { onToggleSlot(ReminderSlot.Morning, it) },
-                onEditTime = { onEditTime(ReminderSlot.Morning) },
-            )
-            ReminderSettingRow(
-                slot = ReminderSlot.Evening,
-                setting = settings.evening,
-                onToggle = { onToggleSlot(ReminderSlot.Evening, it) },
-                onEditTime = { onEditTime(ReminderSlot.Evening) },
-            )
-            if (!notificationPermissionGranted && (settings.morning.enabled || settings.evening.enabled)) {
-                Text(
-                    "알림 권한이 꺼져 있으면 설정한 시간이 되어도 리마인더가 오지 않을 수 있어요.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReminderSettingRow(
-    slot: ReminderSlot,
-    setting: ReminderSetting,
-    onToggle: (Boolean) -> Unit,
-    onEditTime: () -> Unit,
-) {
-    val reminderStatusText = if (setting.enabled) "켜짐" else "꺼짐"
-    Card(
-        shape = MiniCutPanelShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics(mergeDescendants = true) {
-                    contentDescription = "${slot.displayName} 리마인더, ${setting.time.formatted()}, $reminderStatusText"
-                }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(slot.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    if (setting.enabled) "${setting.time.formatted()} · ${slot.title}" else "현재 꺼져 있어요",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = setting.enabled,
-                onCheckedChange = onToggle,
-            )
-            OutlinedButton(onClick = onEditTime) {
-                Text(setting.time.formatted())
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MaintenanceModeCard(
     checkedSteps: Set<Int>,
+    dailyTargetKcal: Int,
+    goalMode: MiniCutGoalMode,
     onToggleStep: (Int) -> Unit,
     onOpenPlan: () -> Unit,
 ) {
+    val reverseDietPlan = MiniCutRules.reverseDietPlan(dailyTargetKcal = dailyTargetKcal, goalMode = goalMode)
     val checklist =
         listOf(
-            "유지 단계 시작: 하루 목표를 한 단계 높이거나 현재 목표를 3~4일 더 관찰해보세요.",
-            "주 3회는 체중·컨디션을 짧게 체크해서 반등 신호를 먼저 잡으세요.",
-            "이번 주는 하루 한 번만 기록해도 괜찮아요. 기록 리듬만 끊기지 않게 이어가세요.",
+            "종료 후 첫 3~4일은 식사 리듬·수면을 먼저 안정화하세요.",
+            "주 3회는 체중·컨디션을 짧게 체크해 급반등 신호를 빠르게 잡으세요.",
+            "기록량을 줄여도 괜찮지만 하루 1회 기록은 유지해 요요 패턴을 방지하세요.",
         )
 
     Card(
@@ -710,9 +578,34 @@ private fun MaintenanceModeCard(
         ) {
             Text("플랜 종료 후 유지 모드", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
-                "감량 종료 직후 1~2주는 유지 흐름을 만드는 구간이에요. 아래 체크로 다음 주를 준비하세요.",
+                reverseDietPlan.summary,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MiniCutPanelShape,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(reverseDietPlan.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    reverseDietPlan.steps.forEach { step ->
+                        Text(
+                            "• ${step.weekLabel}: ${step.targetCalories.asKcal()} · ${step.note}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        reverseDietPlan.caution,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
             checklist.forEachIndexed { index, label ->
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
