@@ -113,6 +113,7 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val today = uiState.currentDate
     var showEntrySheet by rememberSaveable { mutableStateOf(false) }
+    var showCoachSheet by rememberSaveable { mutableStateOf(false) }
     var editingEntry by remember { mutableStateOf<CalorieEntry?>(null) }
     var maintenanceChecks by rememberSaveable { mutableStateOf(setOf<Int>()) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -141,7 +142,7 @@ fun HomeScreen(
                     MiniCutSectionHeader(
                         kicker = today.asDisplayDate(),
                         title = "미니컷 대시보드",
-                        subtitle = "오늘의 섭취, 플랜 상태, 다음 행동을 한 화면에서 확인하세요.",
+                        subtitle = "오늘의 섭취와 다음 행동만 빠르게 확인하세요.",
                     )
                 }
                 item {
@@ -200,50 +201,24 @@ fun HomeScreen(
                     )
                 }
                 item {
-                    BodyCompositionCheckCard(
-                        todayCheck = uiState.todayConditionCheck,
-                        weeklyWeightTrend = uiState.weeklyWeightTrend,
-                        recoveryRiskAssessment = uiState.recoveryRiskAssessment,
-                        recommendedProteinGrams = uiState.recommendedProteinGrams,
-                        calorieAdjustmentRecommendation = uiState.calorieAdjustmentRecommendation,
-                        onOpenPlan = { suggestedTargetKcal -> onOpenPlan(suggestedTargetKcal) },
-                        onSave = { bodyWeightKg, proteinGrams, resistanceSets, mainLiftKg, relapseTrigger, copingAction, sleepHours, fatigueScore, hungerScore, moodScore, workoutPerformanceScore ->
-                            viewModel.saveDailyConditionCheck(
-                                bodyWeightKg = bodyWeightKg,
-                                proteinGrams = proteinGrams,
-                                resistanceSets = resistanceSets,
-                                mainLiftKg = mainLiftKg,
-                                relapseTrigger = relapseTrigger,
-                                copingAction = copingAction,
-                                sleepHours = sleepHours,
-                                fatigueScore = fatigueScore,
-                                hungerScore = hungerScore,
-                                moodScore = moodScore,
-                                workoutPerformanceScore = workoutPerformanceScore,
-                            )
-                            showMessage("코칭 체크인을 저장했어요")
-                        },
-                        onInvalidInput = ::showMessage,
+                    CoachSummaryCard(
+                        recoveryMessage = uiState.recoveryRiskAssessment.message,
+                        strengthMessage = uiState.strengthTrend.message,
+                        dietBreakTitle = uiState.dietBreakRecommendation.title,
+                        onOpenCoachSheet = { showCoachSheet = true },
                     )
                 }
-                item {
-                    LeanMassProtectionCard(
-                        score = uiState.leanMassProtectionScore,
-                        strengthTrend = uiState.strengthTrend,
-                        relapsePreventionInsight = uiState.relapsePreventionInsight,
-                        dietBreakRecommendation = uiState.dietBreakRecommendation,
-                        onOpenPlan = { onOpenPlan(null) },
-                    )
-                }
-                item {
-                    QuickLogAssistCard(
-                        favoritePresets = uiState.favoritePresets,
-                        recentPresets = uiState.recentPresets,
-                        onLogPreset = { preset ->
-                            viewModel.addEntryFromPreset(preset)
-                            showMessage("\"${preset.foodName}\" 프리셋으로 기록했어요")
-                        },
-                    )
+                if (uiState.favoritePresets.isNotEmpty() || uiState.recentPresets.isNotEmpty()) {
+                    item {
+                        QuickLogAssistCard(
+                            favoritePresets = uiState.favoritePresets,
+                            recentPresets = uiState.recentPresets,
+                            onLogPreset = { preset ->
+                                viewModel.addEntryFromPreset(preset)
+                                showMessage("\"${preset.foodName}\" 프리셋으로 기록했어요")
+                            },
+                        )
+                    }
                 }
                 item {
                     Row(
@@ -253,12 +228,12 @@ fun HomeScreen(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
-                                "오늘 먹은 음식",
+                                "오늘 기록",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
-                                "음식명 중심으로 빠르게 기록하고 수정하세요",
+                                "필요한 기록만 남기고 바로 수정하세요",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -319,6 +294,63 @@ fun HomeScreen(
             },
         )
     }
+
+    if (showCoachSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showCoachSheet = false },
+            modifier = Modifier.navigationBarsPadding(),
+        ) {
+            LazyColumn(
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                item {
+                    MiniCutSectionHeader(
+                        kicker = "COACH CHECK-IN",
+                        title = "코칭 체크인",
+                        subtitle = "체중·단백질·저항운동부터 저장하고 선택 지표는 필요할 때만 더하세요.",
+                    )
+                }
+                item {
+                    BodyCompositionCheckCard(
+                        todayCheck = uiState.todayConditionCheck,
+                        weeklyWeightTrend = uiState.weeklyWeightTrend,
+                        recoveryRiskAssessment = uiState.recoveryRiskAssessment,
+                        recommendedProteinGrams = uiState.recommendedProteinGrams,
+                        calorieAdjustmentRecommendation = uiState.calorieAdjustmentRecommendation,
+                        onOpenPlan = { suggestedTargetKcal -> onOpenPlan(suggestedTargetKcal) },
+                        onSave = { bodyWeightKg, proteinGrams, resistanceSets, mainLiftKg, relapseTrigger, copingAction, sleepHours, fatigueScore, hungerScore, moodScore, workoutPerformanceScore ->
+                            viewModel.saveDailyConditionCheck(
+                                bodyWeightKg = bodyWeightKg,
+                                proteinGrams = proteinGrams,
+                                resistanceSets = resistanceSets,
+                                mainLiftKg = mainLiftKg,
+                                relapseTrigger = relapseTrigger,
+                                copingAction = copingAction,
+                                sleepHours = sleepHours,
+                                fatigueScore = fatigueScore,
+                                hungerScore = hungerScore,
+                                moodScore = moodScore,
+                                workoutPerformanceScore = workoutPerformanceScore,
+                            )
+                            showMessage("코칭 체크인을 저장했어요")
+                            showCoachSheet = false
+                        },
+                        onInvalidInput = ::showMessage,
+                    )
+                }
+                item {
+                    LeanMassProtectionCard(
+                        score = uiState.leanMassProtectionScore,
+                        strengthTrend = uiState.strengthTrend,
+                        relapsePreventionInsight = uiState.relapsePreventionInsight,
+                        dietBreakRecommendation = uiState.dietBreakRecommendation,
+                        onOpenPlan = { onOpenPlan(null) },
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -340,7 +372,7 @@ private fun DailySummaryCard(
         }
     val detail =
         when {
-            todayTotal <= 0 -> "첫 식사부터 가볍게 기록하면 오늘 흐름이 시작됩니다."
+            todayTotal <= 0 -> "첫 기록을 남기면 남은 칼로리가 바로 계산돼요."
             overCalories > 0 -> "${overCalories.asKcal()} 초과했어요"
             remainingCalories == 0 -> "목표를 정확히 맞췄어요"
             else -> "${remainingCalories.asKcal()} 남았어요"
@@ -354,19 +386,30 @@ private fun DailySummaryCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Surface(
-                color = accent.copy(alpha = 0.12f),
-                contentColor = accent,
-                shape = MiniCutPillShape,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                Surface(
+                    color = accent.copy(alpha = 0.12f),
+                    contentColor = accent,
+                    shape = MiniCutPillShape,
+                ) {
+                    Text(
+                        text = statusLabel,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
                 Text(
-                    text = statusLabel,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    text = "${entryCount}건",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -379,11 +422,6 @@ private fun DailySummaryCard(
                     text = detail,
                     style = MaterialTheme.typography.bodyMedium,
                     color = accent,
-                )
-                Text(
-                    text = "${entryCount}건 기록됨",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -400,11 +438,11 @@ private fun DailySummaryCard(
                     tint = accent,
                 )
             }
-            FilledTonalButton(
+            Button(
                 onClick = onAddMeal,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("음식 기록하기")
+                Text(if (entryCount == 0) "첫 음식 기록하기" else "음식 빠르게 추가")
             }
         }
     }
@@ -705,7 +743,7 @@ private fun QuickLogAssistCard(
         ) {
             Text("빠른 기록", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
-                "최근 먹은 조합이나 즐겨찾기를 한 번 눌러 바로 오늘 기록에 추가하세요.",
+                "반복되는 식사는 한 번 눌러 바로 추가하세요.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -915,7 +953,6 @@ private fun AddEntrySheet(
         },
         shape = MiniCutCardShape,
         containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = null,
     ) {
         Column(
             modifier = Modifier

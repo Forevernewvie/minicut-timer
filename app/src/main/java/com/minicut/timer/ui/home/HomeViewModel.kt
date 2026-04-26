@@ -68,7 +68,7 @@ private data class HomePrimaryState(
     val recentPresets: List<EntryQuickPreset>,
     val favoritePresets: List<EntryQuickPreset>,
     val todayConditionCheck: DailyConditionCheck?,
-    val weeklyConditionChecks: List<DailyConditionCheck>,
+    val recentConditionChecks: List<DailyConditionCheck>,
 )
 
 private data class HomeCoreState(
@@ -132,7 +132,7 @@ class HomeViewModel(
                     endDate = date,
                 )
             },
-        ) { core, presets, todayConditionCheck, weeklyConditionChecks ->
+        ) { core, presets, todayConditionCheck, recentConditionChecks ->
             HomePrimaryState(
                 plan = core.plan,
                 currentDate = core.currentDate,
@@ -141,7 +141,7 @@ class HomeViewModel(
                 recentPresets = presets.first,
                 favoritePresets = presets.second,
                 todayConditionCheck = todayConditionCheck,
-                weeklyConditionChecks = weeklyConditionChecks,
+                recentConditionChecks = recentConditionChecks,
             )
         }
 
@@ -149,17 +149,17 @@ class HomeViewModel(
         combine(primaryStateFlow, weeklySummariesFlow) { primaryState, weeklySummaries ->
             val target = primaryState.plan?.dailyTargetKcal ?: MiniCutRules.DEFAULT_TARGET_KCAL
             val planPhase = primaryState.plan?.let { MiniCutRules.phaseOf(it.startDate, it.endDate, primaryState.currentDate) }
-            val weeklyWeightTrend = MiniCutRules.weeklyWeightTrend(primaryState.weeklyConditionChecks)
-            val strengthTrend = MiniCutRules.strengthTrend(primaryState.weeklyConditionChecks)
-            val recoveryRisk = MiniCutRules.recoveryRiskAssessment(primaryState.weeklyConditionChecks)
-            val relapseInsight = MiniCutRules.relapsePreventionInsight(primaryState.weeklyConditionChecks)
+            val weeklyWeightTrend = MiniCutRules.weeklyWeightTrend(primaryState.recentConditionChecks)
+            val strengthTrend = MiniCutRules.strengthTrend(primaryState.recentConditionChecks)
+            val recoveryRisk = MiniCutRules.recoveryRiskAssessment(primaryState.recentConditionChecks)
+            val relapseInsight = MiniCutRules.relapsePreventionInsight(primaryState.recentConditionChecks)
             val latestWeight =
                 primaryState.todayConditionCheck?.bodyWeightKg
-                    ?: primaryState.weeklyConditionChecks.lastOrNull { (it.bodyWeightKg ?: 0f) > 0f }?.bodyWeightKg
+                    ?: primaryState.recentConditionChecks.lastOrNull { (it.bodyWeightKg ?: 0f) > 0f }?.bodyWeightKg
             val recommendedProtein = MiniCutRules.recommendedProteinGrams(latestWeight)
             val leanMassProtectionScore =
                 MiniCutRules.leanMassProtectionScore(
-                    checks = primaryState.weeklyConditionChecks,
+                    checks = primaryState.recentConditionChecks,
                     recommendedProteinGrams = recommendedProtein,
                     recoveryRisk = recoveryRisk,
                 )

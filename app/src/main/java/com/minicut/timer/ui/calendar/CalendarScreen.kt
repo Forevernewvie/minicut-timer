@@ -66,11 +66,13 @@ import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
 import com.minicut.timer.domain.model.CalorieEntry
 import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.ui.components.MiniCutBackdrop
+import com.minicut.timer.ui.components.MiniCutEmptyState
 import com.minicut.timer.ui.components.MiniCutInlineFeedback
 import com.minicut.timer.ui.components.MiniCutInlineFeedbackTone
 import com.minicut.timer.ui.components.MiniCutMetricTile
 import com.minicut.timer.ui.components.MiniCutPanelShape
 import com.minicut.timer.ui.components.MiniCutPillShape
+import com.minicut.timer.ui.components.MiniCutScreenHorizontalPadding
 import com.minicut.timer.ui.components.MiniCutSectionHeader
 import com.minicut.timer.ui.util.asCompactDate
 import com.minicut.timer.ui.util.asCompactKcal
@@ -97,9 +99,10 @@ fun CalendarScreen() {
     val summaryMap = remember(uiState.summaries) { uiState.summaries.associateBy { it.date } }
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
     val orderedDays = remember(firstDayOfWeek) { orderedDaysOfWeek(firstDayOfWeek) }
+    val monthRange = rememberCalendarMonthRange()
     val calendarState = rememberCalendarState(
-        startMonth = YearMonth.now().minusMonths(24),
-        endMonth = YearMonth.now().plusMonths(24),
+        startMonth = monthRange.start,
+        endMonth = monthRange.end,
         firstVisibleMonth = uiState.month,
         firstDayOfWeek = firstDayOfWeek,
     )
@@ -128,7 +131,12 @@ fun CalendarScreen() {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 108.dp),
+                contentPadding = PaddingValues(
+                    start = MiniCutScreenHorizontalPadding,
+                    end = MiniCutScreenHorizontalPadding,
+                    top = 16.dp,
+                    bottom = 108.dp,
+                ),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 item {
@@ -153,6 +161,14 @@ fun CalendarScreen() {
                         selectedDate = uiState.selectedDate,
                         selectedDayTotalCalories = uiState.selectedDayTotalCalories,
                     )
+                }
+                if (uiState.monthLoggedDaysCount == 0) {
+                    item {
+                        CalendarEmptyMonthCard(
+                            month = uiState.month,
+                            isCurrentMonth = uiState.month == currentMonth,
+                        )
+                    }
                 }
                 item {
                     CalendarBoard(
@@ -202,6 +218,23 @@ fun CalendarScreen() {
         )
     }
 }
+
+private data class CalendarMonthRange(
+    val start: YearMonth,
+    val end: YearMonth,
+)
+
+@Composable
+private fun rememberCalendarMonthRange(): CalendarMonthRange =
+    remember {
+        val currentMonth = YearMonth.now()
+        CalendarMonthRange(
+            start = currentMonth.minusMonths(CALENDAR_MONTH_RANGE_PADDING),
+            end = currentMonth.plusMonths(CALENDAR_MONTH_RANGE_PADDING),
+        )
+    }
+
+private const val CALENDAR_MONTH_RANGE_PADDING = 24L
 
 @Composable
 private fun MonthOverviewRow(
@@ -369,25 +402,12 @@ private fun CalendarEntriesBottomSheet(
                 }
             }
             if (selectedEntries.isEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Surface(
-                        shape = MiniCutPanelShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                    ) {
-                        Text(
-                            text = "이 날은 기록이 없어요.",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    FilledTonalButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MiniCutPillShape,
-                    ) {
-                        Text("확인")
-                    }
-                }
+                MiniCutEmptyState(
+                    title = "이 날은 아직 기록이 없어요",
+                    body = "빈 날도 실패가 아니라 흐름을 확인하는 정보입니다. 오늘 기록 탭에서 식사를 추가하면 캘린더에 바로 표시돼요.",
+                    actionLabel = "확인",
+                    onAction = onDismiss,
+                )
             } else {
                 selectedEntries.forEach { entry ->
                     CalendarEntryCard(
@@ -398,6 +418,18 @@ private fun CalendarEntriesBottomSheet(
             }
         }
     }
+}
+
+@Composable
+private fun CalendarEmptyMonthCard(
+    month: YearMonth,
+    isCurrentMonth: Boolean,
+) {
+    MiniCutEmptyState(
+        title = if (isCurrentMonth) "이번 달 로그가 아직 비어 있어요" else "${month.monthValue}월 로그가 비어 있어요",
+        body = "식사 기록이 생기면 날짜 칸에 작은 칼로리 배지가 생깁니다. 기록한 날과 쉬어간 날을 한눈에 구분할 수 있어요.",
+        accent = MaterialTheme.colorScheme.tertiary,
+    )
 }
 
 @Composable

@@ -50,6 +50,48 @@ class ConditionCheckValidationTest {
     }
 
     @Test
+    fun validateConditionCheckInput_rejectsRecoveryScoresOutsideOneToFive() {
+        val result =
+            validateConditionCheckInput(
+                bodyWeightText = "",
+                proteinText = "",
+                resistanceSetsText = "",
+                mainLiftKgText = "",
+                relapseTrigger = null,
+                copingAction = null,
+                sleepHoursText = "",
+                fatigueScoreText = "6",
+                hungerScoreText = "",
+                moodScoreText = "",
+                workoutPerformanceScoreText = "",
+            )
+
+        assertFalse(result.isValid)
+        assertEquals("피로 점수는 1~5 범위로 입력해주세요.", result.errorMessage)
+    }
+
+    @Test
+    fun validateConditionCheckInput_rejectsSleepHoursOutsideAllowedRange() {
+        val result =
+            validateConditionCheckInput(
+                bodyWeightText = "",
+                proteinText = "",
+                resistanceSetsText = "",
+                mainLiftKgText = "",
+                relapseTrigger = null,
+                copingAction = null,
+                sleepHoursText = "25",
+                fatigueScoreText = "",
+                hungerScoreText = "",
+                moodScoreText = "",
+                workoutPerformanceScoreText = "",
+            )
+
+        assertFalse(result.isValid)
+        assertEquals("수면 시간은 0.5~24시간 범위로 입력해주세요.", result.errorMessage)
+    }
+
+    @Test
     fun validateConditionCheckInput_acceptsPositiveNumbers() {
         val result =
             validateConditionCheckInput(

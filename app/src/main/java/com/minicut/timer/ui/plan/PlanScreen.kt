@@ -67,11 +67,13 @@ import com.minicut.timer.domain.model.TargetGuidance
 import com.minicut.timer.domain.model.TargetGuidanceTone
 import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.ui.components.MiniCutBackdrop
+import com.minicut.timer.ui.components.MiniCutBottomActionBar
 import com.minicut.timer.ui.components.MiniCutCardShape
 import com.minicut.timer.ui.components.MiniCutInlineFeedback
 import com.minicut.timer.ui.components.MiniCutInlineFeedbackTone
 import com.minicut.timer.ui.components.MiniCutPanelShape
 import com.minicut.timer.ui.components.MiniCutPillShape
+import com.minicut.timer.ui.components.MiniCutScreenHorizontalPadding
 import com.minicut.timer.ui.components.MiniCutSectionHeader
 import com.minicut.timer.ui.home.NotificationSettingsCard
 import com.minicut.timer.notifications.NotificationSettings
@@ -298,7 +300,12 @@ fun PlanScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 28.dp),
+                contentPadding = PaddingValues(
+                    start = MiniCutScreenHorizontalPadding,
+                    end = MiniCutScreenHorizontalPadding,
+                    top = 20.dp,
+                    bottom = 28.dp,
+                ),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 item {
@@ -317,7 +324,12 @@ fun PlanScreen(
                     }
                 }
                 item {
-                    PlanHeroCard()
+                    PlanFocusCard(
+                        durationWeeks = durationWeeks,
+                        dailyTargetKcal = dailyTargetKcal,
+                        goalMode = goalMode,
+                        endDate = endDate,
+                    )
                 }
                 item {
                     PlanSummaryCard(
@@ -329,9 +341,6 @@ fun PlanScreen(
                         activityLevel = activityLevel,
                         estimatedMaintenanceKcal = estimatedMaintenanceKcal,
                     )
-                }
-                item {
-                    PrincipleCard()
                 }
                 item {
                     StepCard(
@@ -369,19 +378,12 @@ fun PlanScreen(
                         title = "집중 기간 선택",
                         description = "2~6주 안에서 짧게 끝내는 미니컷 원칙을 유지하세요.",
                     ) {
-                        SelectionChips {
-                            (MiniCutRules.MIN_WEEKS..MiniCutRules.MAX_WEEKS).forEach { week ->
-                                FilterChip(
-                                    selected = durationWeeks == week,
-                                    onClick = { durationWeeks = week },
-                                    modifier = Modifier.semantics {
-                                        selected = durationWeeks == week
-                                        contentDescription = "${week}주 ${if (durationWeeks == week) "선택됨" else "선택 안 됨"}"
-                                    },
-                                    label = { Text("${week}주") },
-                                )
-                            }
-                        }
+                        SelectionChips(
+                            options = MiniCutRules.MIN_WEEKS..MiniCutRules.MAX_WEEKS,
+                            selectedValue = durationWeeks,
+                            onSelect = { durationWeeks = it },
+                            label = { "${it}주" },
+                        )
                     }
                 }
                 item {
@@ -390,20 +392,12 @@ fun PlanScreen(
                         title = "하루 목표 칼로리",
                         description = "오늘 남음/초과 계산에 사용할 기준을 고르세요.",
                     ) {
-                        SelectionChips {
-                            MiniCutRules.TARGET_OPTIONS_KCAL.forEach { target ->
-                                FilterChip(
-                                    selected = dailyTargetKcal == target,
-                                    onClick = { dailyTargetKcal = target },
-                                    modifier = Modifier.semantics {
-                                        selected = dailyTargetKcal == target
-                                        contentDescription =
-                                            "${target.asKcal()} ${if (dailyTargetKcal == target) "선택됨" else "선택 안 됨"}"
-                                    },
-                                    label = { Text(target.asKcal()) },
-                                )
-                            }
-                        }
+                        SelectionChips(
+                            options = MiniCutRules.TARGET_OPTIONS_KCAL,
+                            selectedValue = dailyTargetKcal,
+                            onSelect = { dailyTargetKcal = it },
+                            label = Int::asKcal,
+                        )
                     }
                 }
                 item {
@@ -412,19 +406,12 @@ fun PlanScreen(
                         title = "플랜 목적 선택",
                         description = "목표에 따라 실행 강도와 종료 후 전략이 달라집니다.",
                     ) {
-                        SelectionChips {
-                            MiniCutGoalMode.entries.forEach { mode ->
-                                FilterChip(
-                                    selected = goalMode == mode,
-                                    onClick = { goalMode = mode },
-                                    modifier = Modifier.semantics {
-                                        selected = goalMode == mode
-                                        contentDescription = "${mode.displayName} ${if (goalMode == mode) "선택됨" else "선택 안 됨"}"
-                                    },
-                                    label = { Text(mode.displayName) },
-                                )
-                            }
-                        }
+                        SelectionChips(
+                            options = MiniCutGoalMode.entries,
+                            selectedValue = goalMode,
+                            onSelect = { goalMode = it },
+                            label = MiniCutGoalMode::displayName,
+                        )
                         SupportingText(goalMode.shortDescription)
                     }
                 }
@@ -463,19 +450,12 @@ fun PlanScreen(
                         title = "결핍 강도 가드레일",
                         description = "체중과 활동 수준으로 유지칼로리를 추정해 현재 목표의 안전 범위를 점검합니다.",
                     ) {
-                        SelectionChips {
-                            ActivityLevel.entries.forEach { level ->
-                                FilterChip(
-                                    selected = activityLevel == level,
-                                    onClick = { activityLevel = level },
-                                    modifier = Modifier.semantics {
-                                        selected = activityLevel == level
-                                        contentDescription = "${level.displayName} ${if (activityLevel == level) "선택됨" else "선택 안 됨"}"
-                                    },
-                                    label = { Text(level.displayName) },
-                                )
-                            }
-                        }
+                        SelectionChips(
+                            options = ActivityLevel.entries,
+                            selectedValue = activityLevel,
+                            onSelect = { activityLevel = it },
+                            label = ActivityLevel::displayName,
+                        )
                         OutlinedTextField(
                             value = bodyWeightText,
                             onValueChange = { bodyWeightText = it.filter { ch -> ch.isDigit() || ch == '.' } },
@@ -664,6 +644,49 @@ private fun PrincipleCard() {
 }
 
 @Composable
+private fun PlanFocusCard(
+    durationWeeks: Int,
+    dailyTargetKcal: Int,
+    goalMode: MiniCutGoalMode,
+    endDate: LocalDate,
+) {
+    Card(
+        shape = MiniCutCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "이번 플랜의 판단 기준",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "${durationWeeks}주 동안 ${dailyTargetKcal.asKcal()}",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "${endDate.asCompactDate()}에 종료를 전제로 ${goalMode.displayName} 모드로 운영합니다. 아래 단계는 이 한 문장을 정확히 만들기 위한 최소 입력만 모았습니다.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f),
+                )
+            }
+            SelectionChips {
+                HeroBadge("기간 고정")
+                HeroBadge("하루 기준")
+                HeroBadge("안전 가드레일")
+            }
+        }
+    }
+}
+
+@Composable
 private fun DataManagementCard(
     onClearAllClick: () -> Unit,
 ) {
@@ -821,6 +844,33 @@ private fun StepCard(
     }
 }
 
+@Composable
+private fun <T> SelectionChips(
+    options: Iterable<T>,
+    selectedValue: T,
+    onSelect: (T) -> Unit,
+    label: (T) -> String,
+) {
+    SelectionChips {
+        options.forEach { option ->
+            val optionLabel = label(option)
+            val isSelected = selectedValue == option
+            FilterChip(
+                selected = isSelected,
+                onClick = { onSelect(option) },
+                modifier = Modifier.semantics {
+                    selected = isSelected
+                    contentDescription = "$optionLabel ${selectionStateLabel(isSelected)}"
+                },
+                label = { Text(optionLabel) },
+            )
+        }
+    }
+}
+
+private fun selectionStateLabel(isSelected: Boolean): String =
+    if (isSelected) "선택됨" else "선택 안 됨"
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SelectionChips(
@@ -910,33 +960,27 @@ private fun SavePlanBar(
     deficitGuardrail: DeficitGuardrail,
     onSave: () -> Unit,
 ) {
-    Surface(shadowElevation = 8.dp, tonalElevation = 2.dp) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+    MiniCutBottomActionBar {
+        Button(
+            onClick = onSave,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+            shape = MiniCutPillShape,
+            contentPadding = PaddingValues(vertical = 14.dp),
         ) {
-            Button(
-                onClick = onSave,
-                enabled = enabled,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(vertical = 14.dp),
-            ) {
-                Text(buttonLabel, style = MaterialTheme.typography.titleMedium)
-            }
-            Text(
-                text =
-                    when {
-                        !suitabilityConfirmed -> "사전 적합성 점검 3개 항목을 모두 체크하면 저장할 수 있어요."
-                        !deficitGuardrail.canSave -> "결핍 강도가 높아 저장이 잠겨 있어요. 목표를 상향하거나 유지칼로리를 다시 확인하세요."
-                        enabled -> "저장 후 바로 오늘 기록에서 같은 기준을 사용합니다."
-                        else -> "현재 설정은 이미 저장된 플랜과 동일합니다."
-                    },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text(buttonLabel, style = MaterialTheme.typography.titleMedium)
         }
+        Text(
+            text =
+                when {
+                    !suitabilityConfirmed -> "사전 적합성 3개 항목을 체크하면 저장할 수 있어요."
+                    !deficitGuardrail.canSave -> "결핍 강도가 높아 잠겨 있어요. 목표를 상향하거나 유지칼로리를 다시 확인하세요."
+                    enabled -> "저장 후 오늘 기록과 캘린더가 같은 기준을 사용합니다."
+                    else -> "현재 설정은 이미 저장된 플랜과 동일합니다."
+                },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

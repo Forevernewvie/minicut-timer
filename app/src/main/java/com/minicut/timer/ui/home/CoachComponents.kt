@@ -26,11 +26,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.minicut.timer.domain.model.CalorieAdjustmentDirection
 import com.minicut.timer.domain.model.CalorieAdjustmentRecommendation
@@ -54,6 +56,88 @@ import com.minicut.timer.ui.components.MiniCutCardShape
 import com.minicut.timer.ui.components.MiniCutPanelShape
 import com.minicut.timer.ui.components.MiniCutPillShape
 import com.minicut.timer.ui.util.asKcal
+import java.util.Locale
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun CoachSummaryCard(
+    recoveryMessage: String,
+    strengthMessage: String,
+    dietBreakTitle: String,
+    onOpenCoachSheet: () -> Unit,
+) {
+    Card(
+        shape = MiniCutCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("오늘 코칭", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "홈에서는 신호만, 판단과 입력은 체크인 시트에서 처리합니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CoachSignalPill(label = "회복", message = recoveryMessage)
+                CoachSignalPill(label = "근력", message = strengthMessage)
+                CoachSignalPill(label = "유지", message = dietBreakTitle, emphasized = true)
+            }
+            Button(
+                onClick = onOpenCoachSheet,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("3분 체크인 열기")
+            }
+        }
+    }
+}
+
+@Composable
+private fun CoachSignalPill(
+    label: String,
+    message: String,
+    emphasized: Boolean = false,
+) {
+    val accent = if (emphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        shape = MiniCutPillShape,
+        color =
+            if (emphasized) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.50f)
+            },
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.12f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = accent,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
 
 @Composable
 internal fun NotificationSettingsCard(
@@ -80,18 +164,12 @@ internal fun NotificationSettingsCard(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ReminderCadence.entries.forEach { cadence ->
-                    FilterChip(
-                        selected = settings.cadence == cadence,
-                        onClick = { onCadenceChange(cadence) },
-                        label = { Text(cadence.displayName) },
-                    )
-                }
-            }
+            CoachChoiceChips(
+                options = ReminderCadence.entries,
+                isSelected = { settings.cadence == it },
+                onClick = onCadenceChange,
+                label = ReminderCadence::displayName,
+            )
             ReminderSlot.entries.forEach { slot ->
                 ReminderSettingRow(
                     slot = slot,
@@ -103,6 +181,31 @@ internal fun NotificationSettingsCard(
         }
     }
 }
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun <T> CoachChoiceChips(
+    options: Iterable<T>,
+    isSelected: (T) -> Boolean,
+    onClick: (T) -> Unit,
+    label: (T) -> String,
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        options.forEach { option ->
+            FilterChip(
+                selected = isSelected(option),
+                onClick = { onClick(option) },
+                label = { Text(label(option)) },
+            )
+        }
+    }
+}
+
+private fun String.toggledSelection(option: String): String =
+    if (this == option) "" else option
 
 @Composable
 private fun ReminderSettingRow(
@@ -175,7 +278,7 @@ internal fun LeanMassProtectionCard(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("근손실 방어 점수", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("근손실 방어", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Surface(
                 color = accent.copy(alpha = 0.12f),
                 contentColor = accent,
@@ -191,6 +294,8 @@ internal fun LeanMassProtectionCard(
                 score.message,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
             )
             val strengthAccent =
                 when (strengthTrend.status) {
@@ -319,13 +424,20 @@ internal fun BodyCompositionCheckCard(
             WeeklyWeightTrendStatus.TooFast -> MaterialTheme.colorScheme.error
             WeeklyWeightTrendStatus.GainOrStall -> MaterialTheme.colorScheme.error
         }
-    val trendRateText = weeklyWeightTrend.ratePercentPerWeek?.let { "주당 ${String.format("%.2f", it)}%" } ?: "속도 계산 대기"
+    val trendRateText = weeklyWeightTrend.ratePercentPerWeek?.let { "주당 ${String.format(Locale.KOREAN, "%.2f", it)}%" } ?: "속도 계산 대기"
     val recoveryAccent =
         when (recoveryRiskAssessment.status) {
             RecoveryRiskStatus.NoData -> MaterialTheme.colorScheme.onSurfaceVariant
             RecoveryRiskStatus.Stable -> MaterialTheme.colorScheme.primary
             RecoveryRiskStatus.Watch -> MaterialTheme.colorScheme.tertiary
             RecoveryRiskStatus.High -> MaterialTheme.colorScheme.error
+        }
+    val recoveryLabel =
+        when (recoveryRiskAssessment.status) {
+            RecoveryRiskStatus.NoData -> "대기"
+            RecoveryRiskStatus.Stable -> "안정"
+            RecoveryRiskStatus.Watch -> "주의"
+            RecoveryRiskStatus.High -> "높음"
         }
 
     Card(
@@ -337,41 +449,38 @@ internal fun BodyCompositionCheckCard(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("근손실 방어 체크인", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(
-                "체중·단백질·저항운동 세트를 함께 기록하면 감량 속도와 근손실 리스크를 바로 점검할 수 있어요.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Surface(
-                color = trendColor.copy(alpha = 0.12f),
-                contentColor = trendColor,
-                shape = MiniCutPillShape,
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("오늘 체크인", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "$trendRateText · ${weeklyWeightTrend.message}",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    "필수 3개(체중·단백질·저항운동)만 입력해도 코칭이 갱신됩니다.",
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = recoveryAccent.copy(alpha = 0.10f),
-                shape = MiniCutPillShape,
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    "회복 리스크 · ${recoveryRiskAssessment.message}",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = recoveryAccent,
+                CoachStatusPill(
+                    label = "체중 속도",
+                    value = trendRateText,
+                    supporting = weeklyWeightTrend.message,
+                    tint = trendColor,
                 )
-            }
-            if (recommendedProteinGrams != null) {
-                Text(
-                    "권장 단백질: ${recommendedProteinGrams}g (최근 체중 × 2.0g)",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                CoachStatusPill(
+                    label = "회복",
+                    value = recoveryLabel,
+                    supporting = recoveryRiskAssessment.message,
+                    tint = recoveryAccent,
                 )
+                recommendedProteinGrams?.let {
+                    CoachStatusPill(
+                        label = "단백질",
+                        value = "${it}g",
+                        supporting = "최근 체중 × 2.0g",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
             val recommendationAccent =
                 when (calorieAdjustmentRecommendation.direction) {
@@ -415,6 +524,10 @@ internal fun BodyCompositionCheckCard(
                     }
                 }
             }
+            CoachSectionLabel(
+                title = "필수 지표",
+                subtitle = "숫자 3개만으로 감량 속도와 방어 점수를 계산합니다.",
+            )
             OutlinedTextField(
                 value = bodyWeightText,
                 onValueChange = { bodyWeightText = it.filter { ch -> ch.isDigit() || ch == '.' } },
@@ -449,40 +562,36 @@ internal fun BodyCompositionCheckCard(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
             )
+            CoachSectionLabel(
+                title = "이탈 방지",
+                subtitle = "오늘의 트리거와 대응 루틴을 하나씩만 선택하세요.",
+            )
             Text(
                 "폭식/이탈 트리거",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                RelapsePreventionCatalog.triggerOptions.forEach { trigger ->
-                    FilterChip(
-                        selected = relapseTrigger == trigger,
-                        onClick = { relapseTrigger = if (relapseTrigger == trigger) "" else trigger },
-                        label = { Text(trigger) },
-                    )
-                }
-            }
+            CoachChoiceChips(
+                options = RelapsePreventionCatalog.triggerOptions,
+                isSelected = { relapseTrigger == it },
+                onClick = { relapseTrigger = relapseTrigger.toggledSelection(it) },
+                label = { it },
+            )
             Text(
                 "대응 루틴",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                RelapsePreventionCatalog.copingActionOptions.forEach { action ->
-                    FilterChip(
-                        selected = copingAction == action,
-                        onClick = { copingAction = if (copingAction == action) "" else action },
-                        label = { Text(action) },
-                    )
-                }
-            }
+            CoachChoiceChips(
+                options = RelapsePreventionCatalog.copingActionOptions,
+                isSelected = { copingAction == it },
+                onClick = { copingAction = copingAction.toggledSelection(it) },
+                label = { it },
+            )
+            CoachSectionLabel(
+                title = "선택 컨디션",
+                subtitle = "회복 리스크가 흔들릴 때만 추가로 남겨도 괜찮아요.",
+            )
             OutlinedTextField(
                 value = sleepHoursText,
                 onValueChange = { sleepHoursText = it.filter { ch -> ch.isDigit() || ch == '.' } },
@@ -563,8 +672,57 @@ internal fun BodyCompositionCheckCard(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("체크인 저장")
+                Text("오늘 체크인 저장")
             }
         }
+    }
+}
+
+@Composable
+private fun CoachStatusPill(
+    label: String,
+    value: String,
+    supporting: String,
+    tint: Color,
+) {
+    Surface(
+        shape = MiniCutPanelShape,
+        color = tint.copy(alpha = 0.10f),
+        border = BorderStroke(1.dp, tint.copy(alpha = 0.20f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = tint,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(
+                supporting,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CoachSectionLabel(
+    title: String,
+    subtitle: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(
+            subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

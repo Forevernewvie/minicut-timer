@@ -11,3 +11,5 @@ $PWD/
 .omx/
 hs_err_pid*.log
 replay_pid*.log
+
+.kotlin/

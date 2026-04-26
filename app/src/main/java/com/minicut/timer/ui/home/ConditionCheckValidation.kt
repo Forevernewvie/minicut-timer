@@ -18,6 +18,11 @@ data class ConditionCheckValidationResult(
         get() = errorMessage == null
 }
 
+private data class ParsedConditionField<T>(
+    val value: T?,
+    val errorMessage: String? = null,
+)
+
 fun validateConditionCheckInput(
     bodyWeightText: String,
     proteinText: String,
@@ -41,105 +46,139 @@ fun validateConditionCheckInput(
     val trimmedMood = moodScoreText.trim()
     val trimmedPerformance = workoutPerformanceScoreText.trim()
 
-    val parsedWeight = trimmedWeight.takeIf { it.isNotBlank() }?.toFloatOrNull()
-    if (trimmedWeight.isNotBlank() && parsedWeight == null) {
-        return ConditionCheckValidationResult(errorMessage = "체중은 숫자(예: 72.4)로 입력해주세요.")
-    }
-    if (parsedWeight != null && parsedWeight <= 0f) {
-        return ConditionCheckValidationResult(errorMessage = "체중은 0보다 큰 값으로 입력해주세요.")
-    }
+    val parsedWeight =
+        parsePositiveFloat(
+            trimmedValue = trimmedWeight,
+            invalidMessage = "체중은 숫자(예: 72.4)로 입력해주세요.",
+            nonPositiveMessage = "체중은 0보다 큰 값으로 입력해주세요.",
+        )
+    parsedWeight.errorMessage?.let { return ConditionCheckValidationResult(errorMessage = it) }
 
-    val parsedProtein = trimmedProtein.takeIf { it.isNotBlank() }?.toIntOrNull()
-    if (trimmedProtein.isNotBlank() && parsedProtein == null) {
-        return ConditionCheckValidationResult(errorMessage = "단백질은 숫자로 입력해주세요.")
-    }
-    if (parsedProtein != null && parsedProtein <= 0) {
-        return ConditionCheckValidationResult(errorMessage = "단백질은 0보다 큰 값으로 입력해주세요.")
-    }
+    val parsedProtein =
+        parsePositiveInt(
+            trimmedValue = trimmedProtein,
+            invalidMessage = "단백질은 숫자로 입력해주세요.",
+            nonPositiveMessage = "단백질은 0보다 큰 값으로 입력해주세요.",
+        )
+    parsedProtein.errorMessage?.let { return ConditionCheckValidationResult(errorMessage = it) }
 
-    val parsedSets = trimmedSets.takeIf { it.isNotBlank() }?.toIntOrNull()
-    if (trimmedSets.isNotBlank() && parsedSets == null) {
-        return ConditionCheckValidationResult(errorMessage = "세트 수는 숫자로 입력해주세요.")
-    }
-    if (parsedSets != null && parsedSets <= 0) {
-        return ConditionCheckValidationResult(errorMessage = "세트 수는 1 이상으로 입력해주세요.")
-    }
+    val parsedSets =
+        parsePositiveInt(
+            trimmedValue = trimmedSets,
+            invalidMessage = "세트 수는 숫자로 입력해주세요.",
+            nonPositiveMessage = "세트 수는 1 이상으로 입력해주세요.",
+        )
+    parsedSets.errorMessage?.let { return ConditionCheckValidationResult(errorMessage = it) }
 
-    val parsedMainLift = trimmedMainLift.takeIf { it.isNotBlank() }?.toFloatOrNull()
-    if (trimmedMainLift.isNotBlank() && parsedMainLift == null) {
-        return ConditionCheckValidationResult(errorMessage = "핵심 리프트는 숫자(예: 100)로 입력해주세요.")
-    }
-    if (parsedMainLift != null && parsedMainLift <= 0f) {
-        return ConditionCheckValidationResult(errorMessage = "핵심 리프트는 0보다 큰 값으로 입력해주세요.")
-    }
+    val parsedMainLift =
+        parsePositiveFloat(
+            trimmedValue = trimmedMainLift,
+            invalidMessage = "핵심 리프트는 숫자(예: 100)로 입력해주세요.",
+            nonPositiveMessage = "핵심 리프트는 0보다 큰 값으로 입력해주세요.",
+        )
+    parsedMainLift.errorMessage?.let { return ConditionCheckValidationResult(errorMessage = it) }
 
-    val parsedSleepHours = trimmedSleepHours.takeIf { it.isNotBlank() }?.toFloatOrNull()
-    if (trimmedSleepHours.isNotBlank() && parsedSleepHours == null) {
-        return ConditionCheckValidationResult(errorMessage = "수면 시간은 숫자(예: 6.5)로 입력해주세요.")
-    }
-    if (parsedSleepHours != null && parsedSleepHours !in 0.5f..24f) {
-        return ConditionCheckValidationResult(errorMessage = "수면 시간은 0.5~24시간 범위로 입력해주세요.")
-    }
+    val parsedSleepHours = parseSleepHours(trimmedSleepHours)
+    parsedSleepHours.errorMessage?.let { return ConditionCheckValidationResult(errorMessage = it) }
 
-    val parsedFatigue = trimmedFatigue.takeIf { it.isNotBlank() }?.toIntOrNull()
-    if (trimmedFatigue.isNotBlank() && parsedFatigue == null) {
-        return ConditionCheckValidationResult(errorMessage = "피로 점수는 1~5 사이 숫자로 입력해주세요.")
-    }
-    if (parsedFatigue != null && parsedFatigue !in 1..5) {
-        return ConditionCheckValidationResult(errorMessage = "피로 점수는 1~5 범위로 입력해주세요.")
-    }
+    val parsedFatigue = parseRecoveryScore(trimmedFatigue, label = "피로 점수")
+    parsedFatigue.errorMessage?.let { return ConditionCheckValidationResult(errorMessage = it) }
 
-    val parsedHunger = trimmedHunger.takeIf { it.isNotBlank() }?.toIntOrNull()
-    if (trimmedHunger.isNotBlank() && parsedHunger == null) {
-        return ConditionCheckValidationResult(errorMessage = "허기 점수는 1~5 사이 숫자로 입력해주세요.")
-    }
-    if (parsedHunger != null && parsedHunger !in 1..5) {
-        return ConditionCheckValidationResult(errorMessage = "허기 점수는 1~5 범위로 입력해주세요.")
-    }
+    val parsedHunger = parseRecoveryScore(trimmedHunger, label = "허기 점수")
+    parsedHunger.errorMessage?.let { return ConditionCheckValidationResult(errorMessage = it) }
 
-    val parsedMood = trimmedMood.takeIf { it.isNotBlank() }?.toIntOrNull()
-    if (trimmedMood.isNotBlank() && parsedMood == null) {
-        return ConditionCheckValidationResult(errorMessage = "기분 점수는 1~5 사이 숫자로 입력해주세요.")
-    }
-    if (parsedMood != null && parsedMood !in 1..5) {
-        return ConditionCheckValidationResult(errorMessage = "기분 점수는 1~5 범위로 입력해주세요.")
-    }
+    val parsedMood = parseRecoveryScore(trimmedMood, label = "기분 점수")
+    parsedMood.errorMessage?.let { return ConditionCheckValidationResult(errorMessage = it) }
 
-    val parsedPerformance = trimmedPerformance.takeIf { it.isNotBlank() }?.toIntOrNull()
-    if (trimmedPerformance.isNotBlank() && parsedPerformance == null) {
-        return ConditionCheckValidationResult(errorMessage = "수행감 점수는 1~5 사이 숫자로 입력해주세요.")
-    }
-    if (parsedPerformance != null && parsedPerformance !in 1..5) {
-        return ConditionCheckValidationResult(errorMessage = "수행감 점수는 1~5 범위로 입력해주세요.")
-    }
+    val parsedPerformance = parseRecoveryScore(trimmedPerformance, label = "수행감 점수")
+    parsedPerformance.errorMessage?.let { return ConditionCheckValidationResult(errorMessage = it) }
 
     val hasAnyValue =
-            parsedWeight != null ||
-            parsedProtein != null ||
-            parsedSets != null ||
-            parsedMainLift != null ||
+        parsedWeight.value != null ||
+            parsedProtein.value != null ||
+            parsedSets.value != null ||
+            parsedMainLift.value != null ||
             !relapseTrigger.isNullOrBlank() ||
             !copingAction.isNullOrBlank() ||
-            parsedSleepHours != null ||
-            parsedFatigue != null ||
-            parsedHunger != null ||
-            parsedMood != null ||
-            parsedPerformance != null
+            parsedSleepHours.value != null ||
+            parsedFatigue.value != null ||
+            parsedHunger.value != null ||
+            parsedMood.value != null ||
+            parsedPerformance.value != null
     if (!hasAnyValue) {
         return ConditionCheckValidationResult(errorMessage = "체중/단백질/세트/회복지표 중 최소 1개는 입력해야 저장됩니다.")
     }
 
     return ConditionCheckValidationResult(
-        bodyWeightKg = parsedWeight,
-        proteinGrams = parsedProtein,
-        resistanceSets = parsedSets,
-        mainLiftKg = parsedMainLift,
+        bodyWeightKg = parsedWeight.value,
+        proteinGrams = parsedProtein.value,
+        resistanceSets = parsedSets.value,
+        mainLiftKg = parsedMainLift.value,
         relapseTrigger = relapseTrigger?.trim()?.takeIf { it.isNotEmpty() },
         copingAction = copingAction?.trim()?.takeIf { it.isNotEmpty() },
-        sleepHours = parsedSleepHours,
-        fatigueScore = parsedFatigue,
-        hungerScore = parsedHunger,
-        moodScore = parsedMood,
-        workoutPerformanceScore = parsedPerformance,
+        sleepHours = parsedSleepHours.value,
+        fatigueScore = parsedFatigue.value,
+        hungerScore = parsedHunger.value,
+        moodScore = parsedMood.value,
+        workoutPerformanceScore = parsedPerformance.value,
     )
+}
+
+private fun parsePositiveFloat(
+    trimmedValue: String,
+    invalidMessage: String,
+    nonPositiveMessage: String,
+): ParsedConditionField<Float> {
+    if (trimmedValue.isBlank()) return ParsedConditionField(null)
+
+    val parsedValue = trimmedValue.toFloatOrNull()
+        ?: return ParsedConditionField(null, invalidMessage)
+    return if (parsedValue > 0f) {
+        ParsedConditionField(parsedValue)
+    } else {
+        ParsedConditionField(null, nonPositiveMessage)
+    }
+}
+
+private fun parsePositiveInt(
+    trimmedValue: String,
+    invalidMessage: String,
+    nonPositiveMessage: String,
+): ParsedConditionField<Int> {
+    if (trimmedValue.isBlank()) return ParsedConditionField(null)
+
+    val parsedValue = trimmedValue.toIntOrNull()
+        ?: return ParsedConditionField(null, invalidMessage)
+    return if (parsedValue > 0) {
+        ParsedConditionField(parsedValue)
+    } else {
+        ParsedConditionField(null, nonPositiveMessage)
+    }
+}
+
+private fun parseSleepHours(trimmedValue: String): ParsedConditionField<Float> {
+    if (trimmedValue.isBlank()) return ParsedConditionField(null)
+
+    val parsedValue = trimmedValue.toFloatOrNull()
+        ?: return ParsedConditionField(null, "수면 시간은 숫자(예: 6.5)로 입력해주세요.")
+    return if (parsedValue in 0.5f..24f) {
+        ParsedConditionField(parsedValue)
+    } else {
+        ParsedConditionField(null, "수면 시간은 0.5~24시간 범위로 입력해주세요.")
+    }
+}
+
+private fun parseRecoveryScore(
+    trimmedValue: String,
+    label: String,
+): ParsedConditionField<Int> {
+    if (trimmedValue.isBlank()) return ParsedConditionField(null)
+
+    val parsedValue = trimmedValue.toIntOrNull()
+        ?: return ParsedConditionField(null, "${label}는 1~5 사이 숫자로 입력해주세요.")
+    return if (parsedValue in 1..5) {
+        ParsedConditionField(parsedValue)
+    } else {
+        ParsedConditionField(null, "${label}는 1~5 범위로 입력해주세요.")
+    }
 }
