@@ -82,6 +82,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.kizitonwose.calendar:compose:2.10.1")
     implementation("com.google.android.gms:play-services-ads:24.5.0")
+    implementation("com.google.android.ump:user-messaging-platform:4.0.0")
 
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")

@@ -35,7 +35,11 @@ import com.minicut.timer.ui.navigation.Destination
 import com.minicut.timer.ui.plan.PlanScreen
 
 @Composable
-fun MiniCutRoot() {
+fun MiniCutRoot(
+    canRequestAds: Boolean,
+    isPrivacyOptionsRequired: Boolean,
+    onPrivacyOptionsClick: () -> Unit,
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -50,20 +54,23 @@ fun MiniCutRoot() {
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    tonalElevation = 1.dp,
-                    shadowElevation = 6.dp,
-                    color = MaterialTheme.colorScheme.surface,
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.10f),
-                    ),
-                ) {
-                    AdMobBanner(
+                if (canRequestAds) {
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                    )
+                        shape = RoundedCornerShape(18.dp),
+                        tonalElevation = 1.dp,
+                        shadowElevation = 6.dp,
+                        color = MaterialTheme.colorScheme.surface,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.10f),
+                        ),
+                    ) {
+                        AdMobBanner(
+                            modifier = Modifier.fillMaxWidth(),
+                            canRequestAds = canRequestAds,
+                        )
+                    }
                 }
                 Surface(
                     shape = RoundedCornerShape(30.dp),
@@ -158,6 +165,8 @@ fun MiniCutRoot() {
                 PlanScreen(
                     onSaved = { navController.navigate(Destination.Home.route) },
                     suggestedTargetKcal = suggestedTarget,
+                    isPrivacyOptionsRequired = isPrivacyOptionsRequired,
+                    onPrivacyOptionsClick = onPrivacyOptionsClick,
                 )
             }
         }

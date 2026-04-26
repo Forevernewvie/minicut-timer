@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -23,9 +24,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         ensureNotificationsReady()
+        val adsConsentManager = (application as MiniCutApplication).adsConsentManager
+        adsConsentManager.gatherConsent(this)
 
         setContent {
             MiniCutTheme {
+                val adsConsentState by adsConsentManager.uiState.collectAsStateWithLifecycle()
                 var showOnboarding by rememberSaveable {
                     mutableStateOf(!OnboardingPreferences.isCompleted(this))
                 }
@@ -38,7 +42,13 @@ class MainActivity : ComponentActivity() {
                         },
                     )
                 } else {
-                    MiniCutRoot()
+                    MiniCutRoot(
+                        canRequestAds = adsConsentState.canRequestAds,
+                        isPrivacyOptionsRequired = adsConsentState.isPrivacyOptionsRequired,
+                        onPrivacyOptionsClick = {
+                            adsConsentManager.showPrivacyOptionsForm(this) {}
+                        },
+                    )
                 }
             }
         }

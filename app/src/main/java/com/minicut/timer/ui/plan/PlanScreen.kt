@@ -90,6 +90,8 @@ import java.time.LocalDate
 fun PlanScreen(
     onSaved: () -> Unit,
     suggestedTargetKcal: Int? = null,
+    isPrivacyOptionsRequired: Boolean,
+    onPrivacyOptionsClick: () -> Unit,
 ) {
     val context = LocalContext.current
     val repository = context.miniCutRepository
@@ -498,6 +500,8 @@ fun PlanScreen(
                 }
                 item {
                     DataManagementCard(
+                        isPrivacyOptionsRequired = isPrivacyOptionsRequired,
+                        onPrivacyOptionsClick = onPrivacyOptionsClick,
                         onClearAllClick = { showDataResetDialog = true },
                     )
                 }
@@ -688,6 +692,8 @@ private fun PlanFocusCard(
 
 @Composable
 private fun DataManagementCard(
+    isPrivacyOptionsRequired: Boolean,
+    onPrivacyOptionsClick: () -> Unit,
     onClearAllClick: () -> Unit,
 ) {
     Card(
@@ -709,6 +715,14 @@ private fun DataManagementCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (isPrivacyOptionsRequired) {
+                OutlinedButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onPrivacyOptionsClick,
+                ) {
+                    Text("광고 개인정보 옵션 관리")
+                }
+            }
             OutlinedButton(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = onClearAllClick,

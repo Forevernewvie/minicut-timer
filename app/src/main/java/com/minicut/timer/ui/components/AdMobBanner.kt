@@ -20,6 +20,7 @@ private const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/63009781
 @Composable
 fun AdMobBanner(
     modifier: Modifier = Modifier,
+    canRequestAds: Boolean,
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -41,10 +42,12 @@ fun AdMobBanner(
         onDispose { adView.destroy() }
     }
 
-    LaunchedEffect(adView, adUnitId, adSize) {
+    LaunchedEffect(adView, adUnitId, adSize, canRequestAds) {
         adView.adUnitId = adUnitId
         adView.setAdSize(adSize)
-        adView.loadAd(AdRequest.Builder().build())
+        if (canRequestAds) {
+            adView.loadAd(AdRequest.Builder().build())
+        }
     }
 
     AndroidView(
