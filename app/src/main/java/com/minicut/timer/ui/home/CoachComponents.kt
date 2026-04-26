@@ -82,25 +82,21 @@ internal fun CoachSummaryCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 CoachSignalPill(
                     label = "회복",
                     message = recoveryMessage,
-                    modifier = Modifier.weight(1f),
                 )
                 CoachSignalPill(
                     label = "근력",
                     message = strengthMessage,
-                    modifier = Modifier.weight(1f),
                 )
                 CoachSignalPill(
                     label = "유지",
                     message = dietBreakTitle,
                     emphasized = true,
-                    modifier = Modifier.weight(1f),
                 )
             }
             Button(
@@ -122,7 +118,7 @@ private fun CoachSignalPill(
 ) {
     val accent = if (emphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         shape = MiniCutPillShape,
         color =
             if (emphasized) {
@@ -146,8 +142,6 @@ private fun CoachSignalPill(
                 message,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
