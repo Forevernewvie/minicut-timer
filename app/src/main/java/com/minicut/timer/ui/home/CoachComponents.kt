@@ -58,7 +58,6 @@ import com.minicut.timer.ui.components.MiniCutPillShape
 import com.minicut.timer.ui.util.asKcal
 import java.util.Locale
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CoachSummaryCard(
     recoveryMessage: String,
@@ -83,13 +82,26 @@ internal fun CoachSummaryCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            FlowRow(
+            Row(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                CoachSignalPill(label = "회복", message = recoveryMessage)
-                CoachSignalPill(label = "근력", message = strengthMessage)
-                CoachSignalPill(label = "유지", message = dietBreakTitle, emphasized = true)
+                CoachSignalPill(
+                    label = "회복",
+                    message = recoveryMessage,
+                    modifier = Modifier.weight(1f),
+                )
+                CoachSignalPill(
+                    label = "근력",
+                    message = strengthMessage,
+                    modifier = Modifier.weight(1f),
+                )
+                CoachSignalPill(
+                    label = "유지",
+                    message = dietBreakTitle,
+                    emphasized = true,
+                    modifier = Modifier.weight(1f),
+                )
             }
             Button(
                 onClick = onOpenCoachSheet,
@@ -105,10 +117,12 @@ internal fun CoachSummaryCard(
 private fun CoachSignalPill(
     label: String,
     message: String,
+    modifier: Modifier = Modifier,
     emphasized: Boolean = false,
 ) {
     val accent = if (emphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
+        modifier = modifier,
         shape = MiniCutPillShape,
         color =
             if (emphasized) {
