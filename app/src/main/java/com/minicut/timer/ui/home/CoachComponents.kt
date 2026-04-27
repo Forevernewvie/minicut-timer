@@ -346,6 +346,52 @@ internal fun LeanMassProtectionCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (dietBreakRecommendation.shouldSuggest) {
+                        val wizardSteps =
+                            listOf(
+                                "오늘은 추가 감량보다 유지 칼로리 접근을 우선 검토합니다.",
+                                "${dietBreakRecommendation.suggestedDays}일 동안 수면·피로·허기·훈련 신호를 매일 짧게 체크합니다.",
+                                "회복 신호가 안정되면 플랜에서 하루 목표를 다시 점검하고 감량 리듬으로 복귀합니다.",
+                            )
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "다이어트 브레이크 미니 가이드",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                            wizardSteps.forEachIndexed { index, step ->
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = MiniCutPillShape,
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f)),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.Top,
+                                    ) {
+                                        Text(
+                                            "${index + 1}",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.secondary,
+                                        )
+                                        Text(
+                                            step,
+                                            modifier = Modifier.weight(1f),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                "의학적 조언이 아니라 앱 내 기록 기반 안전 가이드입니다. 어지러움·통증·섭식 문제가 있으면 전문가 상담을 우선하세요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
                         OutlinedButton(
                             onClick = onOpenPlan,
                             modifier = Modifier.fillMaxWidth(),

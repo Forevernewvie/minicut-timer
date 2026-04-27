@@ -237,3 +237,49 @@ data class DietBreakRecommendation(
     val title: String = "다이어트 브레이크 불필요",
     val message: String = "현재는 계획한 감량 리듬을 유지해도 괜찮아요.",
 )
+
+enum class MissionType {
+    FoodLog,
+    CoachCheckIn,
+    WeeklyReview,
+}
+
+data class TodayMission(
+    val type: MissionType,
+    val title: String,
+    val description: String,
+    val actionLabel: String,
+    val isComplete: Boolean,
+)
+
+data class PlanProgressSnapshot(
+    val phase: MiniCutPhase,
+    val progress: Float,
+    val elapsedDays: Int,
+    val remainingDays: Int,
+    val dDayLabel: String,
+    val headline: String,
+    val supportingText: String,
+)
+
+data class WeeklyCoachingSnapshot(
+    val title: String,
+    val summary: String,
+    val nextAction: String,
+    val momentumLabel: String,
+    val momentumMessage: String,
+)
+
+enum class CalendarRhythmStatus {
+    Empty,
+    WithinTarget,
+    OverTarget,
+}
+
+data class CalendarRhythmSummary(
+    val loggedDays: Int = 0,
+    val withinTargetDays: Int = 0,
+    val overTargetDays: Int = 0,
+    val checkInDays: Int = 0,
+    val message: String = "기록과 체크인이 쌓이면 월간 리듬을 한눈에 볼 수 있어요.",
+)

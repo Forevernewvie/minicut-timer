@@ -12,10 +12,17 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.minicut.timer.MainActivity
+import com.minicut.timer.MiniCutApplication
 import com.minicut.timer.R
 import com.minicut.timer.data.local.NotificationPreferences
+import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.util.MiniCutDiagnostics
 import java.time.ZonedDateTime
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 private const val CHANNEL_ID = "minicut_encouragements"
 private const val CHANNEL_NAME = "미니컷 격려 알림"
@@ -119,54 +126,107 @@ internal fun nextTriggerMillis(
 
 class MiniCutNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        MiniCutDiagnostics.guard("MiniCutNotificationReceiver.onReceive") {
-            val slotName = intent.getStringExtra(EXTRA_SLOT) ?: return@guard
-            val slot = ReminderSlot.entries.firstOrNull { it.name == slotName } ?: return@guard
-            val settings = NotificationPreferences.load(context)
-            val slotSetting = settings.settingFor(slot)
-            val now = ZonedDateTime.now()
-
-            if (!slotSetting.enabled ||
-                (settings.cadence == ReminderCadence.Weekdays && now.dayOfWeek.isWeekend())
-            ) {
-                syncMiniCutNotifications(context, settings)
-                return@guard
+        val pendingResult = goAsync()
+        val appContext = context.applicationContext
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                deliverReminder(appContext, intent)
+            } catch (throwable: Throwable) {
+                MiniCutDiagnostics.report("MiniCutNotificationReceiver.onReceive", throwable)
+            } finally {
+                pendingResult.finish()
             }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                syncMiniCutNotifications(context, settings)
-                return@guard
-            }
-
-            val message = slot.messages[now.dayOfMonth % slot.messages.size]
-            val notification =
-                NotificationCompat.Builder(context, CHANNEL_ID)
-                    .setSmallIcon(R.mipmap.ic_launcher)
-                    .setContentTitle(slot.title)
-                    .setContentText(message)
-                    .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-                    .setContentIntent(
-                        PendingIntent.getActivity(
-                            context,
-                            slot.requestCode,
-                            Intent(context, MainActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            },
-                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                        ),
-                    )
-                    .setAutoCancel(true)
-                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                    .build()
-
-            NotificationManagerCompat.from(context).notify(slot.requestCode, notification)
-            syncMiniCutNotifications(context, settings)
         }
     }
 }
+
+private suspend fun deliverReminder(
+    context: Context,
+    intent: Intent,
+) {
+    val slotName = intent.getStringExtra(EXTRA_SLOT) ?: return
+    val slot = ReminderSlot.entries.firstOrNull { it.name == slotName } ?: return
+    val settings = NotificationPreferences.load(context)
+    val slotSetting = settings.settingFor(slot)
+    val now = ZonedDateTime.now()
+
+    if (!slotSetting.enabled ||
+        (settings.cadence == ReminderCadence.Weekdays && now.dayOfWeek.isWeekend())
+    ) {
+        syncMiniCutNotifications(context, settings)
+        return
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+        android.content.pm.PackageManager.PERMISSION_GRANTED
+    ) {
+        syncMiniCutNotifications(context, settings)
+        return
+    }
+
+    val message =
+        runCatching {
+            reminderMessageFor(context, slot, now)
+        }.getOrElse { throwable ->
+            MiniCutDiagnostics.report("MiniCutNotificationReceiver.reminderMessageFor", throwable)
+            fallbackReminderMessage(slot, now)
+        }
+    val notification =
+        NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(slot.title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    context,
+                    slot.requestCode,
+                    Intent(context, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    },
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+
+    NotificationManagerCompat.from(context).notify(slot.requestCode, notification)
+    syncMiniCutNotifications(context, settings)
+}
+
+internal suspend fun reminderMessageFor(
+    context: Context,
+    slot: ReminderSlot,
+    now: ZonedDateTime,
+): String {
+    val repository = (context.applicationContext as? MiniCutApplication)?.container?.repository
+        ?: return fallbackReminderMessage(slot, now)
+    val currentDate = now.toLocalDate()
+    val recentSummaries =
+        repository.observeDailySummaries(
+            startDate = currentDate.minusDays(6),
+            endDate = currentDate,
+        ).first()
+    val recentChecks =
+        repository.observeDailyConditionChecks(
+            startDate = currentDate.minusDays(6),
+            endDate = currentDate,
+        ).first()
+
+    return MiniCutRules.stateAwareReminderMessage(
+        isEvening = slot == ReminderSlot.Evening,
+        currentDate = currentDate,
+        recentSummaries = recentSummaries,
+        recentChecks = recentChecks,
+    )
+}
+
+internal fun fallbackReminderMessage(
+    slot: ReminderSlot,
+    now: ZonedDateTime,
+): String = slot.messages[now.dayOfMonth % slot.messages.size]
 
 class MiniCutBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

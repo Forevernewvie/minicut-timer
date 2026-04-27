@@ -1,26 +1,29 @@
 package com.minicut.timer.domain.rules
 
-import com.minicut.timer.domain.model.CalorieRangeStatus
+import com.minicut.timer.domain.model.ActivityLevel
+import com.minicut.timer.domain.model.CalendarRhythmStatus
 import com.minicut.timer.domain.model.CalorieAdjustmentDirection
-import com.minicut.timer.domain.model.DailyConditionCheck
+import com.minicut.timer.domain.model.CalorieRangeStatus
 import com.minicut.timer.domain.model.DailyCalorieSummary
+import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.DeficitRiskLevel
+import com.minicut.timer.domain.model.LeanMassProtectionGrade
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
-import com.minicut.timer.domain.model.ActivityLevel
-import com.minicut.timer.domain.model.LeanMassProtectionGrade
+import com.minicut.timer.domain.model.MiniCutPlan
+import com.minicut.timer.domain.model.MissionType
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
 import com.minicut.timer.domain.model.RecoveryRiskStatus
 import com.minicut.timer.domain.model.StrengthTrendStatus
 import com.minicut.timer.domain.model.TargetGuidanceTone
 import com.minicut.timer.domain.model.WeeklyWeightTrend
 import com.minicut.timer.domain.model.WeeklyWeightTrendStatus
+import java.time.LocalDate
+import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDate
-import java.time.LocalDateTime
 
 class MiniCutRulesTest {
 
@@ -449,5 +452,129 @@ class MiniCutRulesTest {
         assertEquals("야식", insight.recurringTrigger)
         assertEquals(2, insight.triggerCount)
         assertTrue(insight.recommendedAction?.contains("양치") == true)
+    }
+
+    @Test
+    fun planProgressSnapshot_exposesDdayAndSupportingCopy() {
+        val plan =
+            MiniCutPlan(
+                startDate = LocalDate.of(2026, 4, 10),
+                durationWeeks = 2,
+                endDate = LocalDate.of(2026, 4, 23),
+                dailyTargetKcal = 1300,
+            )
+
+        val snapshot = MiniCutRules.planProgressSnapshot(plan, LocalDate.of(2026, 4, 16))
+
+        assertEquals(MiniCutPhase.Active, snapshot.phase)
+        assertEquals("D-8", snapshot.dDayLabel)
+        assertEquals(7, snapshot.elapsedDays)
+        assertEquals(8, snapshot.remainingDays)
+        assertTrue(snapshot.headline.contains("2주"))
+    }
+
+    @Test
+    fun planProgressSnapshot_labelsEndDateAsDday() {
+        val plan =
+            MiniCutPlan(
+                startDate = LocalDate.of(2026, 4, 10),
+                durationWeeks = 2,
+                endDate = LocalDate.of(2026, 4, 23),
+                dailyTargetKcal = 1300,
+            )
+
+        val snapshot = MiniCutRules.planProgressSnapshot(plan, LocalDate.of(2026, 4, 23))
+
+        assertEquals(MiniCutPhase.Active, snapshot.phase)
+        assertEquals("D-day", snapshot.dDayLabel)
+        assertEquals(1, snapshot.remainingDays)
+    }
+
+    @Test
+    fun todayMissions_markCompletedHabitsAndWeeklyReview() {
+        val missions =
+            MiniCutRules.todayMissions(
+                hasFoodLog = true,
+                hasCoachCheckIn = false,
+                weeklyReport =
+                    MiniCutRules.weeklyAdherenceReport(
+                        summaries =
+                            listOf(
+                                DailyCalorieSummary(LocalDate.of(2026, 4, 8), 1200, 1),
+                                DailyCalorieSummary(LocalDate.of(2026, 4, 9), 1250, 1),
+                                DailyCalorieSummary(LocalDate.of(2026, 4, 10), 1300, 1),
+                            ),
+                        targetCalories = 1300,
+                    ),
+            )
+
+        assertTrue(missions.first { it.type == MissionType.FoodLog }.isComplete)
+        assertFalse(missions.first { it.type == MissionType.CoachCheckIn }.isComplete)
+        assertTrue(missions.first { it.type == MissionType.WeeklyReview }.isComplete)
+    }
+
+    @Test
+    fun calendarRhythmSummary_countsFoodAndCheckInSignals() {
+        val summaries =
+            listOf(
+                DailyCalorieSummary(LocalDate.of(2026, 4, 1), 1200, 1),
+                DailyCalorieSummary(LocalDate.of(2026, 4, 2), 1600, 1),
+                DailyCalorieSummary(LocalDate.of(2026, 4, 3), 0, 0),
+            )
+        val checks =
+            listOf(
+                DailyConditionCheck(
+                    date = LocalDate.of(2026, 4, 1),
+                    fatigueScore = 2,
+                    updatedAt = LocalDateTime.of(2026, 4, 1, 9, 0),
+                ),
+                DailyConditionCheck(
+                    date = LocalDate.of(2026, 4, 3),
+                    hungerScore = 3,
+                    updatedAt = LocalDateTime.of(2026, 4, 3, 9, 0),
+                ),
+            )
+
+        val summary = MiniCutRules.calendarRhythmSummary(summaries, checks, targetCalories = 1300)
+
+        assertEquals(2, summary.loggedDays)
+        assertEquals(1, summary.withinTargetDays)
+        assertEquals(1, summary.overTargetDays)
+        assertEquals(2, summary.checkInDays)
+        assertEquals(CalendarRhythmStatus.WithinTarget, MiniCutRules.calendarRhythmStatus(1200, 1300))
+        assertEquals(CalendarRhythmStatus.OverTarget, MiniCutRules.calendarRhythmStatus(1600, 1300))
+    }
+
+    @Test
+    fun stateAwareReminderMessage_prioritizesRecoveryRiskOverStaticPrompt() {
+        val today = LocalDate.of(2026, 4, 10)
+        val checks =
+            listOf(
+                DailyConditionCheck(
+                    date = today.minusDays(1),
+                    sleepHours = 5f,
+                    fatigueScore = 5,
+                    hungerScore = 5,
+                    updatedAt = LocalDateTime.of(2026, 4, 9, 9, 0),
+                ),
+                DailyConditionCheck(
+                    date = today,
+                    sleepHours = 5f,
+                    fatigueScore = 5,
+                    hungerScore = 5,
+                    updatedAt = LocalDateTime.of(2026, 4, 10, 9, 0),
+                ),
+            )
+
+        val message =
+            MiniCutRules.stateAwareReminderMessage(
+                isEvening = true,
+                currentDate = today,
+                recentSummaries = emptyList(),
+                recentChecks = checks,
+            )
+
+        assertTrue(message.contains("회복"))
+        assertTrue(message.contains("체크인"))
     }
 }

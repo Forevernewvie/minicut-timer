@@ -31,7 +31,7 @@ class AppSmokeTest {
     @Test
     fun launchShowsOnboardingWhenNotCompleted() {
         ActivityScenario.launch(MainActivity::class.java).use {
-            composeTestRule.onNodeWithText("미니컷 시작하기").assertIsDisplayed()
+            composeTestRule.onNodeWithText("플랜 만들고 시작하기").assertIsDisplayed()
         }
     }
 

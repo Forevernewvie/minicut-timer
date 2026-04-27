@@ -1,30 +1,37 @@
 package com.minicut.timer.domain.rules
 
-import com.minicut.timer.domain.model.CalorieRangeStatus
+import com.minicut.timer.domain.model.ActivityLevel
+import com.minicut.timer.domain.model.CalendarRhythmStatus
+import com.minicut.timer.domain.model.CalendarRhythmSummary
 import com.minicut.timer.domain.model.CalorieAdjustmentDirection
 import com.minicut.timer.domain.model.CalorieAdjustmentRecommendation
-import com.minicut.timer.domain.model.DailyConditionCheck
+import com.minicut.timer.domain.model.CalorieRangeStatus
 import com.minicut.timer.domain.model.DailyCalorieSummary
+import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.DeficitGuardrail
 import com.minicut.timer.domain.model.DeficitRiskLevel
-import com.minicut.timer.domain.model.MiniCutGoalMode
-import com.minicut.timer.domain.model.MiniCutPhase
-import com.minicut.timer.domain.model.ActivityLevel
 import com.minicut.timer.domain.model.DietBreakRecommendation
 import com.minicut.timer.domain.model.LeanMassProtectionGrade
 import com.minicut.timer.domain.model.LeanMassProtectionScore
-import com.minicut.timer.domain.model.RelapsePreventionInsight
+import com.minicut.timer.domain.model.MiniCutGoalMode
+import com.minicut.timer.domain.model.MiniCutPhase
+import com.minicut.timer.domain.model.MiniCutPlan
+import com.minicut.timer.domain.model.MissionType
+import com.minicut.timer.domain.model.PlanProgressSnapshot
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
 import com.minicut.timer.domain.model.RecoveryRiskStatus
+import com.minicut.timer.domain.model.RelapsePreventionInsight
 import com.minicut.timer.domain.model.ReverseDietPlan
 import com.minicut.timer.domain.model.ReverseDietStep
 import com.minicut.timer.domain.model.StrengthTrend
 import com.minicut.timer.domain.model.StrengthTrendStatus
 import com.minicut.timer.domain.model.TargetGuidance
 import com.minicut.timer.domain.model.TargetGuidanceTone
+import com.minicut.timer.domain.model.TodayMission
+import com.minicut.timer.domain.model.WeeklyAdherenceReport
+import com.minicut.timer.domain.model.WeeklyCoachingSnapshot
 import com.minicut.timer.domain.model.WeeklyWeightTrend
 import com.minicut.timer.domain.model.WeeklyWeightTrendStatus
-import com.minicut.timer.domain.model.WeeklyAdherenceReport
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
@@ -90,6 +97,50 @@ object MiniCutRules {
             else -> MiniCutPhase.Active
         }
 
+    fun planProgressSnapshot(
+        plan: MiniCutPlan,
+        currentDate: LocalDate,
+    ): PlanProgressSnapshot {
+        val phase = phaseOf(plan.startDate, plan.endDate, currentDate)
+        val progress = calculateProgress(plan.startDate, plan.endDate, currentDate)
+        val totalDays = ChronoUnit.DAYS.between(plan.startDate, plan.endDate).toInt() + 1
+        val elapsedDays =
+            ChronoUnit.DAYS.between(plan.startDate, currentDate)
+                .toInt()
+                .plus(1)
+                .coerceIn(0, totalDays)
+        val remainingDays = remainingDays(plan.startDate, plan.endDate, currentDate)
+        val daysUntilStart = ChronoUnit.DAYS.between(currentDate, plan.startDate).toInt().coerceAtLeast(0)
+        val dDayLabel =
+            when (phase) {
+                MiniCutPhase.Upcoming -> "D-${daysUntilStart}"
+                MiniCutPhase.Active -> if (currentDate == plan.endDate) "D-day" else "D-${remainingDays}"
+                MiniCutPhase.Completed -> "완료"
+            }
+        val headline =
+            when (phase) {
+                MiniCutPhase.Upcoming -> "${daysUntilStart}일 뒤 미니컷 시작"
+                MiniCutPhase.Active -> "${plan.durationWeeks}주 플랜 진행 중"
+                MiniCutPhase.Completed -> "미니컷 기간 완료"
+            }
+        val supportingText =
+            when (phase) {
+                MiniCutPhase.Upcoming -> "시작 전에는 기록 루틴과 하루 기준만 준비하면 충분해요."
+                MiniCutPhase.Active -> "오늘까지 ${elapsedDays}일째예요. 끝나는 날짜가 정해져 있으니 오늘 행동만 마무리하세요."
+                MiniCutPhase.Completed -> "이제 급하게 더 줄이기보다 유지·리버스 전환을 점검할 시점입니다."
+            }
+
+        return PlanProgressSnapshot(
+            phase = phase,
+            progress = progress,
+            elapsedDays = elapsedDays,
+            remainingDays = remainingDays,
+            dDayLabel = dDayLabel,
+            headline = headline,
+            supportingText = supportingText,
+        )
+    }
+
     fun remainingCalories(
         targetCalories: Int,
         consumedCalories: Int,
@@ -148,6 +199,141 @@ object MiniCutRules {
             averageLoggedCalories = averageLoggedCalories,
             focusMessage = focusMessage,
         )
+    }
+
+    fun todayMissions(
+        hasFoodLog: Boolean,
+        hasCoachCheckIn: Boolean,
+        weeklyReport: WeeklyAdherenceReport,
+    ): List<TodayMission> =
+        listOf(
+            TodayMission(
+                type = MissionType.FoodLog,
+                title = "오늘 음식 1개 기록",
+                description = if (hasFoodLog) "오늘 섭취 흐름이 시작됐어요." else "첫 식사만 적어도 남은 칼로리가 바로 보입니다.",
+                actionLabel = if (hasFoodLog) "기록 완료" else "음식 기록하기",
+                isComplete = hasFoodLog,
+            ),
+            TodayMission(
+                type = MissionType.CoachCheckIn,
+                title = "3분 코칭 체크인",
+                description = if (hasCoachCheckIn) "오늘 회복·근력 신호가 반영됐어요." else "체중·단백질·저항운동 중 아는 것만 입력하세요.",
+                actionLabel = if (hasCoachCheckIn) "체크인 완료" else "체크인 열기",
+                isComplete = hasCoachCheckIn,
+            ),
+            TodayMission(
+                type = MissionType.WeeklyReview,
+                title = "이번 주 리듬 확인",
+                description =
+                    if (weeklyReport.loggedDays >= 3) {
+                        "최근 7일 기록 흐름을 읽을 만큼 데이터가 모였어요."
+                    } else {
+                        "주 3회 이상 기록하면 복기 품질이 확 올라갑니다."
+                    },
+                actionLabel = "주간 복기 보기",
+                isComplete = weeklyReport.loggedDays >= 3,
+            ),
+        )
+
+    fun weeklyCoachingSnapshot(
+        weeklyReport: WeeklyAdherenceReport,
+        recoveryRisk: RecoveryRiskAssessment,
+        strengthTrend: StrengthTrend,
+        dietBreakRecommendation: DietBreakRecommendation,
+    ): WeeklyCoachingSnapshot {
+        val nextAction =
+            when {
+                dietBreakRecommendation.shouldSuggest -> "이번 주는 감량 강도보다 ${dietBreakRecommendation.suggestedDays}일 유지 전환을 먼저 검토하세요."
+                recoveryRisk.status == RecoveryRiskStatus.High -> "수면·피로·허기 신호가 높습니다. 오늘 체크인 후 목표 완화를 검토하세요."
+                weeklyReport.loggedDays < 3 -> "다음 목표는 완벽한 식단이 아니라 주 3회 기록 리듬 만들기입니다."
+                weeklyReport.overTargetDays >= 3 -> "초과가 반복됐습니다. 가장 자주 초과한 시간대나 상황을 한 가지 줄여보세요."
+                weeklyReport.adherentDays >= 5 -> "목표 이내 흐름이 좋습니다. 지금은 크게 바꾸지 말고 루틴을 유지하세요."
+                strengthTrend.status == StrengthTrendStatus.Down -> "근력 하락 신호가 있습니다. 훈련 볼륨과 회복을 먼저 점검하세요."
+                else -> "오늘은 음식 1개 기록과 3분 체크인만 마무리해도 충분합니다."
+            }
+        val momentumLabel =
+            when {
+                weeklyReport.loggedDays >= 6 -> "리듬 강함"
+                weeklyReport.loggedDays >= 3 -> "리듬 형성 중"
+                weeklyReport.loggedDays > 0 -> "시작됨"
+                else -> "대기"
+            }
+        val momentumMessage =
+            when {
+                weeklyReport.loggedDays >= 6 -> "거의 매일 앱을 활용하고 있어요. 복기 품질이 가장 좋은 구간입니다."
+                weeklyReport.loggedDays >= 3 -> "이번 주 기록 리듬이 생겼어요. 체크인까지 더하면 코칭 정확도가 올라갑니다."
+                weeklyReport.loggedDays > 0 -> "첫 기록이 들어왔어요. 이번 주 3회 기록을 목표로 잡아보세요."
+                else -> "아직 이번 주 기록이 없어요. 한 끼만 적어도 리포트가 살아납니다."
+            }
+
+        return WeeklyCoachingSnapshot(
+            title = "이번 주 코칭 스냅샷",
+            summary = "기록 ${weeklyReport.loggedDays}/7일 · 목표 이내 ${weeklyReport.adherentDays}일 · 초과 ${weeklyReport.overTargetDays}일",
+            nextAction = nextAction,
+            momentumLabel = momentumLabel,
+            momentumMessage = momentumMessage,
+        )
+    }
+
+    fun calendarRhythmStatus(
+        totalCalories: Int,
+        targetCalories: Int,
+    ): CalendarRhythmStatus =
+        when {
+            totalCalories <= 0 -> CalendarRhythmStatus.Empty
+            totalCalories > targetCalories -> CalendarRhythmStatus.OverTarget
+            else -> CalendarRhythmStatus.WithinTarget
+        }
+
+    fun calendarRhythmSummary(
+        summaries: List<DailyCalorieSummary>,
+        checks: List<DailyConditionCheck>,
+        targetCalories: Int,
+    ): CalendarRhythmSummary {
+        val loggedDays = summaries.count { it.totalCalories > 0 }
+        val withinTargetDays = summaries.count { it.totalCalories > 0 && it.totalCalories <= targetCalories }
+        val overTargetDays = summaries.count { it.totalCalories > targetCalories }
+        val checkInDays = checks.count()
+        val message =
+            when {
+                loggedDays == 0 && checkInDays == 0 -> "아직 월간 리듬이 비어 있어요. 오늘 한 끼와 체크인 하나만 남겨보세요."
+                loggedDays >= 20 -> "이번 달 기록 리듬이 매우 안정적이에요. 복기에서 패턴을 읽기 좋습니다."
+                loggedDays >= 10 -> "기록한 날이 충분히 쌓이고 있어요. 초과일과 체크인일을 함께 비교해보세요."
+                loggedDays > 0 -> "기록이 시작됐어요. 빈 날도 실패가 아니라 리듬을 조정할 단서입니다."
+                else -> "체크인은 시작됐어요. 음식 기록까지 더하면 칼로리 리듬이 보입니다."
+            }
+        return CalendarRhythmSummary(
+            loggedDays = loggedDays,
+            withinTargetDays = withinTargetDays,
+            overTargetDays = overTargetDays,
+            checkInDays = checkInDays,
+            message = message,
+        )
+    }
+
+    fun stateAwareReminderMessage(
+        isEvening: Boolean,
+        currentDate: LocalDate,
+        recentSummaries: List<DailyCalorieSummary>,
+        recentChecks: List<DailyConditionCheck>,
+    ): String {
+        val todaySummary = recentSummaries.firstOrNull { it.date == currentDate }
+        val yesterdaySummary = recentSummaries.firstOrNull { it.date == currentDate.minusDays(1) }
+        val recoveryRisk = recoveryRiskAssessment(recentChecks)
+        return when {
+            recoveryRisk.status == RecoveryRiskStatus.High ->
+                "최근 회복 신호가 높아요. 오늘은 더 줄이기보다 3분 체크인으로 수면·피로를 먼저 확인하세요."
+            isEvening && (todaySummary?.totalCalories ?: 0) == 0 ->
+                "오늘 기록이 아직 없어요. 한 끼만 적어도 내일 복기 흐름이 살아납니다."
+            !isEvening && (yesterdaySummary?.totalCalories ?: 0) == 0 ->
+                "어제 기록이 비었어요. 오늘은 첫 식사 하나만 가볍게 남기며 리듬을 다시 잡아보세요."
+            recentSummaries.count { it.totalCalories > 0 } >= 5 ->
+                "이번 주 기록 리듬이 좋아요. 오늘도 짧게 확인하고 플랜 완주에 한 걸음 더 가까워지세요."
+            isEvening ->
+                "짧은 미니컷일수록 마무리가 중요해요. 오늘 섭취와 체크인을 정리해보세요."
+            else ->
+                "오늘도 짧고 선명하게. 첫 식사부터 가볍게 기록해보세요."
+        }
     }
 
     fun targetGuidance(

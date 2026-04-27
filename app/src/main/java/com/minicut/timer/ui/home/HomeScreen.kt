@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
@@ -85,6 +86,9 @@ import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.EntryQuickPreset
 import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
+import com.minicut.timer.domain.model.WeeklyCoachingSnapshot
+import com.minicut.timer.domain.model.TodayMission
+import com.minicut.timer.domain.model.MissionType
 import com.minicut.timer.domain.model.WeeklyAdherenceReport
 import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.ui.components.MiniCutBackdrop
@@ -118,6 +122,9 @@ fun HomeScreen(
     var maintenanceChecks by rememberSaveable { mutableStateOf(setOf<Int>()) }
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    val weeklyReviewItemIndex =
+        4 + if (uiState.planPhase == MiniCutPhase.Completed && uiState.plan != null) 1 else 0
 
     fun showMessage(message: String) {
         snackbarScope.launch {
@@ -135,6 +142,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
+                state = listState,
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 116.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -157,6 +165,21 @@ fun HomeScreen(
                     )
                 }
                 item {
+                    TodayMissionCard(
+                        missions = uiState.todayMissions,
+                        onMissionClick = { mission ->
+                            when (mission.type) {
+                                MissionType.FoodLog -> showEntrySheet = true
+                                MissionType.CoachCheckIn -> showCoachSheet = true
+                                MissionType.WeeklyReview ->
+                                    snackbarScope.launch {
+                                        listState.animateScrollToItem(weeklyReviewItemIndex)
+                                    }
+                            }
+                        },
+                    )
+                }
+                item {
                     val plan = uiState.plan
                     if (plan == null) {
                         EmptyPlanHero(onOpenPlan = { onOpenPlan(null) })
@@ -168,8 +191,11 @@ fun HomeScreen(
                             dailyTargetKcal = plan.dailyTargetKcal,
                             goalMode = plan.goalMode,
                             phase = uiState.planPhase ?: MiniCutRules.phaseOf(plan.startDate, plan.endDate, today),
-                            progress = MiniCutRules.calculateProgress(plan.startDate, plan.endDate, today),
-                            remainingDays = MiniCutRules.remainingDays(plan.startDate, plan.endDate, today),
+                            progress = uiState.planProgress?.progress ?: MiniCutRules.calculateProgress(plan.startDate, plan.endDate, today),
+                            remainingDays = uiState.planProgress?.remainingDays ?: MiniCutRules.remainingDays(plan.startDate, plan.endDate, today),
+                            dDayLabel = uiState.planProgress?.dDayLabel.orEmpty(),
+                            progressHeadline = uiState.planProgress?.headline.orEmpty(),
+                            progressSupporting = uiState.planProgress?.supportingText.orEmpty(),
                             daysUntilStart = ChronoUnit.DAYS.between(today, plan.startDate).toInt(),
                             onOpenPlan = { onOpenPlan(null) },
                         )
@@ -197,6 +223,7 @@ fun HomeScreen(
                 item {
                     WeeklyReportCard(
                         report = uiState.weeklyReport,
+                        coachingSnapshot = uiState.weeklyCoachingSnapshot,
                         targetCalories = uiState.todayTarget,
                     )
                 }
@@ -449,6 +476,112 @@ private fun DailySummaryCard(
 }
 
 @Composable
+private fun TodayMissionCard(
+    missions: List<TodayMission>,
+    onMissionClick: (TodayMission) -> Unit,
+) {
+    val completedCount = missions.count { it.isComplete }
+    Card(
+        shape = MiniCutCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("오늘의 미니컷 미션", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        "오래 버티기보다 오늘 필요한 행동만 끝내세요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Surface(
+                    shape = MiniCutPillShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                ) {
+                    Text(
+                        "$completedCount/${missions.size}",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+            missions.forEach { mission ->
+                MissionRow(
+                    mission = mission,
+                    onClick = { onMissionClick(mission) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MissionRow(
+    mission: TodayMission,
+    onClick: () -> Unit,
+) {
+    val accent = if (mission.isComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MiniCutPanelShape,
+        color = accent.copy(alpha = if (mission.isComplete) 0.10f else 0.06f),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.18f)),
+        onClick = onClick,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Text(
+                    if (mission.isComplete) "✓" else "○",
+                    color = accent,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(mission.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        mission.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Surface(
+                shape = MiniCutPillShape,
+                color = accent.copy(alpha = 0.12f),
+                contentColor = accent,
+            ) {
+                Text(
+                    mission.actionLabel,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun EmptyPlanHero(onOpenPlan: () -> Unit) {
     Card(
         shape = MiniCutCardShape,
@@ -485,6 +618,9 @@ private fun PlanOverviewCard(
     phase: MiniCutPhase,
     progress: Float,
     remainingDays: Int,
+    dDayLabel: String,
+    progressHeadline: String,
+    progressSupporting: String,
     daysUntilStart: Int,
     onOpenPlan: () -> Unit,
 ) {
@@ -527,11 +663,41 @@ private fun PlanOverviewCard(
                     fontWeight = FontWeight.SemiBold,
                 )
             }
-            Text(
-                "$startDate ~ $endDate",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        "$startDate ~ $endDate",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (progressHeadline.isNotBlank()) {
+                        Text(
+                            progressHeadline,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.tertiary,
+                    shape = MiniCutPillShape,
+                ) {
+                    Text(
+                        text = dDayLabel.ifBlank { "D-${remainingDays}" },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
             Text(
                 "하루 목표 ${dailyTargetKcal.asKcal()}",
                 color = MaterialTheme.colorScheme.primary,
@@ -576,7 +742,7 @@ private fun PlanOverviewCard(
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Text(
-                    progressSupportingText,
+                    progressSupporting.ifBlank { progressSupportingText },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -679,6 +845,7 @@ private fun MaintenanceModeCard(
 @Composable
 private fun WeeklyReportCard(
     report: WeeklyAdherenceReport,
+    coachingSnapshot: WeeklyCoachingSnapshot,
     targetCalories: Int,
 ) {
     Card(
@@ -721,6 +888,26 @@ private fun WeeklyReportCard(
                 color = MaterialTheme.colorScheme.primary,
             )
             Text(report.focusMessage, style = MaterialTheme.typography.bodyMedium)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MiniCutPanelShape,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.50f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(coachingSnapshot.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(coachingSnapshot.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    Text(coachingSnapshot.nextAction, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "${coachingSnapshot.momentumLabel} · ${coachingSnapshot.momentumMessage}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }

@@ -4,19 +4,22 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.minicut.timer.data.repository.MiniCutRepository
-import com.minicut.timer.domain.model.CalorieEntry
 import com.minicut.timer.domain.model.CalorieAdjustmentRecommendation
+import com.minicut.timer.domain.model.CalorieEntry
 import com.minicut.timer.domain.model.CalorieRangeStatus
 import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.DietBreakRecommendation
 import com.minicut.timer.domain.model.EntryQuickPreset
 import com.minicut.timer.domain.model.LeanMassProtectionScore
-import com.minicut.timer.domain.model.MiniCutPlan
 import com.minicut.timer.domain.model.MiniCutPhase
-import com.minicut.timer.domain.model.RelapsePreventionInsight
+import com.minicut.timer.domain.model.MiniCutPlan
+import com.minicut.timer.domain.model.PlanProgressSnapshot
 import com.minicut.timer.domain.model.RecoveryRiskAssessment
+import com.minicut.timer.domain.model.RelapsePreventionInsight
 import com.minicut.timer.domain.model.StrengthTrend
+import com.minicut.timer.domain.model.TodayMission
 import com.minicut.timer.domain.model.WeeklyAdherenceReport
+import com.minicut.timer.domain.model.WeeklyCoachingSnapshot
 import com.minicut.timer.domain.model.WeeklyWeightTrend
 import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.ui.util.currentDateTickerFlow
@@ -41,9 +44,22 @@ data class HomeUiState(
     val todayRangeStatus: CalorieRangeStatus = CalorieRangeStatus.NoData,
     val todayEntries: List<CalorieEntry> = emptyList(),
     val planPhase: MiniCutPhase? = null,
+    val planProgress: PlanProgressSnapshot? = null,
+    val todayMissions: List<TodayMission> =
+        MiniCutRules.todayMissions(
+            hasFoodLog = false,
+            hasCoachCheckIn = false,
+            weeklyReport = WeeklyAdherenceReport(),
+        ),
     val recentPresets: List<EntryQuickPreset> = emptyList(),
     val favoritePresets: List<EntryQuickPreset> = emptyList(),
     val weeklyReport: WeeklyAdherenceReport = WeeklyAdherenceReport(),
+    val weeklyCoachingSnapshot: WeeklyCoachingSnapshot = MiniCutRules.weeklyCoachingSnapshot(
+        weeklyReport = WeeklyAdherenceReport(),
+        recoveryRisk = RecoveryRiskAssessment(),
+        strengthTrend = StrengthTrend(),
+        dietBreakRecommendation = DietBreakRecommendation(),
+    ),
     val todayConditionCheck: DailyConditionCheck? = null,
     val weeklyWeightTrend: WeeklyWeightTrend = WeeklyWeightTrend(),
     val strengthTrend: StrengthTrend = StrengthTrend(),
@@ -149,6 +165,8 @@ class HomeViewModel(
         combine(primaryStateFlow, weeklySummariesFlow) { primaryState, weeklySummaries ->
             val target = primaryState.plan?.dailyTargetKcal ?: MiniCutRules.DEFAULT_TARGET_KCAL
             val planPhase = primaryState.plan?.let { MiniCutRules.phaseOf(it.startDate, it.endDate, primaryState.currentDate) }
+            val planProgress = primaryState.plan?.let { MiniCutRules.planProgressSnapshot(it, primaryState.currentDate) }
+            val weeklyReport = MiniCutRules.weeklyAdherenceReport(weeklySummaries, target)
             val weeklyWeightTrend = MiniCutRules.weeklyWeightTrend(primaryState.recentConditionChecks)
             val strengthTrend = MiniCutRules.strengthTrend(primaryState.recentConditionChecks)
             val recoveryRisk = MiniCutRules.recoveryRiskAssessment(primaryState.recentConditionChecks)
@@ -163,6 +181,12 @@ class HomeViewModel(
                     recommendedProteinGrams = recommendedProtein,
                     recoveryRisk = recoveryRisk,
                 )
+            val dietBreakRecommendation =
+                MiniCutRules.dietBreakRecommendation(
+                    phase = planPhase,
+                    recoveryRisk = recoveryRisk,
+                    weeklyWeightTrend = weeklyWeightTrend,
+                )
             HomeUiState(
                 currentDate = primaryState.currentDate,
                 plan = primaryState.plan,
@@ -173,21 +197,28 @@ class HomeViewModel(
                 todayEntries = primaryState.entries,
                 todayRangeStatus = MiniCutRules.targetStatus(primaryState.total, target),
                 planPhase = planPhase,
+                planProgress = planProgress,
+                todayMissions = MiniCutRules.todayMissions(
+                    hasFoodLog = primaryState.entries.isNotEmpty(),
+                    hasCoachCheckIn = primaryState.todayConditionCheck != null,
+                    weeklyReport = weeklyReport,
+                ),
                 recentPresets = primaryState.recentPresets,
                 favoritePresets = primaryState.favoritePresets,
-                weeklyReport = MiniCutRules.weeklyAdherenceReport(weeklySummaries, target),
+                weeklyReport = weeklyReport,
+                weeklyCoachingSnapshot = MiniCutRules.weeklyCoachingSnapshot(
+                    weeklyReport = weeklyReport,
+                    recoveryRisk = recoveryRisk,
+                    strengthTrend = strengthTrend,
+                    dietBreakRecommendation = dietBreakRecommendation,
+                ),
                 todayConditionCheck = primaryState.todayConditionCheck,
                 weeklyWeightTrend = weeklyWeightTrend,
                 strengthTrend = strengthTrend,
                 recoveryRiskAssessment = recoveryRisk,
                 relapsePreventionInsight = relapseInsight,
                 leanMassProtectionScore = leanMassProtectionScore,
-                dietBreakRecommendation =
-                    MiniCutRules.dietBreakRecommendation(
-                        phase = planPhase,
-                        recoveryRisk = recoveryRisk,
-                        weeklyWeightTrend = weeklyWeightTrend,
-                    ),
+                dietBreakRecommendation = dietBreakRecommendation,
                 recommendedProteinGrams = recommendedProtein,
                 calorieAdjustmentRecommendation =
                     MiniCutRules.recoveryAwareCalorieAdjustmentRecommendation(
