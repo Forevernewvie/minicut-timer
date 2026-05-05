@@ -56,18 +56,34 @@ fun syncMiniCutNotifications(
 ) {
     createMiniCutNotificationChannel(context)
     ReminderSlot.entries.forEach { cancelSlot(context, it) }
-    ReminderSlot.entries.forEach { slot ->
-        val slotSetting = settings.settingFor(slot)
-        if (slotSetting.enabled) {
-            scheduleSlot(
-                context = context,
-                slot = slot,
-                time = slotSetting.time,
-                cadence = settings.cadence,
-            )
-        }
+    reminderScheduleRequests(settings).forEach { request ->
+        scheduleSlot(
+            context = context,
+            slot = request.slot,
+            time = request.time,
+            cadence = request.cadence,
+        )
     }
 }
+
+internal data class ReminderScheduleRequest(
+    val slot: ReminderSlot,
+    val time: ReminderTime,
+    val cadence: ReminderCadence,
+)
+
+internal fun reminderScheduleRequests(settings: NotificationSettings): List<ReminderScheduleRequest> =
+    ReminderSlot.entries.mapNotNull { slot ->
+        val slotSetting = settings.settingFor(slot)
+        if (!slotSetting.enabled) {
+            return@mapNotNull null
+        }
+        ReminderScheduleRequest(
+            slot = slot,
+            time = slotSetting.time,
+            cadence = settings.cadence,
+        )
+    }
 
 private fun scheduleSlot(
     context: Context,
@@ -201,7 +217,7 @@ private fun Intent.reminderSlot(): ReminderSlot? {
     return ReminderSlot.entries.firstOrNull { it.name == slotName }
 }
 
-private fun shouldSkipReminder(
+internal fun shouldSkipReminder(
     slotSetting: ReminderSetting,
     settings: NotificationSettings,
     now: ZonedDateTime,
