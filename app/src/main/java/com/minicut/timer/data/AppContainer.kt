@@ -19,7 +19,6 @@ class AppContainer(context: Context) {
             MiniCutDatabase.MIGRATION_7_8,
             MiniCutDatabase.MIGRATION_8_9,
         )
-            .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2)
             .build()
 
     val repository = MiniCutRepository(

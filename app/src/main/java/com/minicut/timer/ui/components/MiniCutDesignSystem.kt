@@ -1,6 +1,7 @@
 package com.minicut.timer.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,26 +11,35 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-val MiniCutCardShape = RoundedCornerShape(28.dp)
-val MiniCutPanelShape = RoundedCornerShape(22.dp)
-val MiniCutPillShape = RoundedCornerShape(16.dp)
+val MiniCutCardShape = RoundedCornerShape(32.dp)
+val MiniCutPanelShape = RoundedCornerShape(24.dp)
+val MiniCutPillShape = RoundedCornerShape(999.dp)
 val MiniCutBottomBarShape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
 val MiniCutScreenHorizontalPadding: Dp = 20.dp
 
@@ -43,18 +53,158 @@ fun MiniCutBackdrop(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    Box(
-        modifier = modifier.background(
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    MaterialTheme.colorScheme.background,
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.12f),
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
+    val background = MaterialTheme.colorScheme.background
+    val surfaceWash = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f).compositeOver(background)
+    val accentWash = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f).compositeOver(background)
+
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onBackground) {
+        Box(
+            modifier = modifier.background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        background,
+                        surfaceWash,
+                        accentWash,
+                    ),
                 ),
             ),
+        ) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                                Color.Transparent,
+                            ),
+                            center = Offset(120f, 40f),
+                            radius = 760f,
+                        ),
+                    ),
+            )
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
+                                Color.Transparent,
+                            ),
+                            center = Offset(960f, 360f),
+                            radius = 820f,
+                        ),
+                    ),
+            )
+            content()
+        }
+    }
+}
+
+@Composable
+fun MiniCutGlassCard(
+    modifier: Modifier = Modifier,
+    accent: Color = MaterialTheme.colorScheme.primary,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = MiniCutCardShape,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
         ),
-        content = content,
-    )
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.18f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+fun MiniCutSignalPill(
+    text: String,
+    modifier: Modifier = Modifier,
+    accent: Color = MaterialTheme.colorScheme.primary,
+) {
+    Surface(
+        modifier = modifier,
+        shape = MiniCutPillShape,
+        color = accent.copy(alpha = 0.14f),
+        contentColor = accent,
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.22f)),
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+fun MiniCutProgressDial(
+    progress: Float,
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    accent: Color = MaterialTheme.colorScheme.primary,
+    trackColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.24f),
+) {
+    val clampedProgress = progress.coerceIn(0f, 1f)
+    val strokeWidth = 10.dp
+
+    Box(
+        modifier = modifier.size(116.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val strokePx = strokeWidth.toPx()
+            val arcSize = Size(size.width - strokePx, size.height - strokePx)
+            val topLeft = Offset(strokePx / 2f, strokePx / 2f)
+            drawArc(
+                color = trackColor,
+                startAngle = 140f,
+                sweepAngle = 260f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = strokePx, cap = StrokeCap.Round),
+            )
+            drawArc(
+                color = accent,
+                startAngle = 140f,
+                sweepAngle = 260f * clampedProgress,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = strokePx, cap = StrokeCap.Round),
+            )
+        }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+    }
 }
 
 @Composable

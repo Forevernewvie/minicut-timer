@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -69,12 +70,15 @@ import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.ui.components.MiniCutBackdrop
 import com.minicut.timer.ui.components.MiniCutBottomActionBar
 import com.minicut.timer.ui.components.MiniCutCardShape
+import com.minicut.timer.ui.components.MiniCutGlassCard
 import com.minicut.timer.ui.components.MiniCutInlineFeedback
 import com.minicut.timer.ui.components.MiniCutInlineFeedbackTone
 import com.minicut.timer.ui.components.MiniCutPanelShape
 import com.minicut.timer.ui.components.MiniCutPillShape
+import com.minicut.timer.ui.components.MiniCutProgressDial
 import com.minicut.timer.ui.components.MiniCutScreenHorizontalPadding
 import com.minicut.timer.ui.components.MiniCutSectionHeader
+import com.minicut.timer.ui.components.MiniCutSignalPill
 import com.minicut.timer.ui.home.NotificationSettingsCard
 import com.minicut.timer.notifications.NotificationSettings
 import com.minicut.timer.notifications.ReminderSlot
@@ -312,9 +316,9 @@ fun PlanScreen(
             ) {
                 item {
                     MiniCutSectionHeader(
-                        kicker = startDate.asCompactDate(),
-                        title = "미니컷 플랜",
-                        subtitle = "짧은 기간과 하루 목표를 먼저 정하면 기록/복기가 훨씬 쉬워집니다.",
+                        kicker = "${startDate.asCompactDate()} · GUARDRAIL",
+                        title = "스프린트 가드레일 설계",
+                        subtitle = "기간, 목표, 결핍 강도를 한 번에 잠가 안전하게 짧게 끝냅니다.",
                     )
                 }
                 inlineFeedbackMessage?.let { message ->
@@ -334,6 +338,9 @@ fun PlanScreen(
                     )
                 }
                 item {
+                    PlanOperatingScopeCard()
+                }
+                item {
                     PlanSummaryCard(
                         startDate = startDate,
                         endDate = endDate,
@@ -348,7 +355,7 @@ fun PlanScreen(
                     StepCard(
                         step = "1",
                         title = "시작일 선택",
-                        description = "시작일을 기준으로 종료일이 자동 계산됩니다.",
+                        description = "시작일은 플랜 리듬을 맞추기 위한 기준점으로만 사용됩니다.",
                     ) {
                         OutlinedButton(
                             modifier = Modifier.fillMaxWidth(),
@@ -371,7 +378,7 @@ fun PlanScreen(
                         ) {
                             Text(startDate.asCompactDate(), style = MaterialTheme.typography.titleMedium)
                         }
-                        SupportingText("예상 종료일은 ${endDate.asCompactDate()}입니다.")
+                        SupportingText("예상 종료일은 ${endDate.asCompactDate()}입니다. 홈의 D-day와 진행률에도 반영됩니다.")
                     }
                 }
                 item {
@@ -654,16 +661,21 @@ private fun PlanFocusCard(
     goalMode: MiniCutGoalMode,
     endDate: LocalDate,
 ) {
-    Card(
-        shape = MiniCutCardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+    val sprintScale =
+        ((durationWeeks - MiniCutRules.MIN_WEEKS).toFloat() / (MiniCutRules.MAX_WEEKS - MiniCutRules.MIN_WEEKS).toFloat())
+            .coerceIn(0f, 1f)
+
+    MiniCutGlassCard(accent = MaterialTheme.colorScheme.primary) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                MiniCutSignalPill("PLAN COCKPIT")
                 Text(
                     text = "이번 플랜의 판단 기준",
                     style = MaterialTheme.typography.labelMedium,
@@ -676,16 +688,79 @@ private fun PlanFocusCard(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "${endDate.asCompactDate()}에 종료를 전제로 ${goalMode.displayName} 모드로 운영합니다. 아래 단계는 이 한 문장을 정확히 만들기 위한 최소 입력만 모았습니다.",
+                    text = "${endDate.asCompactDate()} 종료를 전제로 ${goalMode.displayName} 모드로 운영합니다. 아래 단계는 이 한 문장을 정확히 만들기 위한 최소 입력만 모았습니다.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            SelectionChips {
-                HeroBadge("기간 고정")
-                HeroBadge("하루 기준")
-                HeroBadge("안전 가드레일")
-            }
+            MiniCutProgressDial(
+                progress = sprintScale,
+                value = "${durationWeeks}주",
+                label = "집중 기간",
+                accent = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(108.dp),
+            )
+        }
+        SelectionChips {
+            HeroBadge("기간 고정")
+            HeroBadge("하루 기준")
+            HeroBadge("결핍 잠금")
+        }
+    }
+}
+
+@Composable
+private fun PlanOperatingScopeCard() {
+    MiniCutGlassCard(accent = MaterialTheme.colorScheme.tertiary) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            MiniCutSignalPill("OPERATING SCOPE", accent = MaterialTheme.colorScheme.tertiary)
+            Text(
+                text = "이번 플랜에서 유지할 범위",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "짧은 기간, 하루 기준, 안전 신호만 선명하게 남깁니다. 복잡한 자동화나 장기 점수화는 이번 흐름에서 덜어냅니다.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            PlanScopeRow(label = "유지", value = "2~6주 집중 · 일일 칼로리 · 로컬 기록")
+            PlanScopeRow(label = "보강", value = "회복 대기 · 체중 속도 · 리듬 복기")
+            PlanScopeRow(label = "덜어냄", value = "복잡한 자동화 · 커뮤니티 순위 · 끝없는 점수화")
+        }
+    }
+}
+
+@Composable
+private fun PlanScopeRow(
+    label: String,
+    value: String,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MiniCutPanelShape,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.tertiary,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = value,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -745,37 +820,29 @@ private fun PlanSummaryCard(
     activityLevel: ActivityLevel,
     estimatedMaintenanceKcal: Int?,
 ) {
-    Card(
-        shape = MiniCutCardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "현재 설정 요약",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = "저장 즉시 홈과 캘린더에서 같은 목표로 남음/초과를 계산합니다.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            SummaryHighlight(label = "집중 기간", value = "${durationWeeks}주")
-            SummaryRow(label = "시작일", value = startDate.asCompactDate())
-            SummaryRow(label = "종료일", value = endDate.asCompactDate())
-            SummaryRow(label = "플랜 목적", value = goalMode.displayName)
-            SummaryRow(label = "활동 수준", value = activityLevel.displayName)
-            if (estimatedMaintenanceKcal != null) {
-                SummaryRow(label = "추정 유지", value = estimatedMaintenanceKcal.asKcal())
-            }
-            SummaryRow(label = "하루 목표", value = dailyTargetKcal.asKcal())
+    MiniCutGlassCard(accent = MaterialTheme.colorScheme.secondary) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            MiniCutSignalPill("CONTRACT SUMMARY", accent = MaterialTheme.colorScheme.secondary)
+            Text(
+                text = "현재 설정 요약",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "저장 즉시 홈과 캘린더에서 같은 목표로 남음/초과를 계산합니다.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
+        SummaryHighlight(label = "집중 기간", value = "${durationWeeks}주")
+        SummaryRow(label = "시작일", value = startDate.asCompactDate())
+        SummaryRow(label = "종료일", value = endDate.asCompactDate())
+        SummaryRow(label = "플랜 목적", value = goalMode.displayName)
+        SummaryRow(label = "활동 수준", value = activityLevel.displayName)
+        if (estimatedMaintenanceKcal != null) {
+            SummaryRow(label = "추정 유지", value = estimatedMaintenanceKcal.asKcal())
+        }
+        SummaryRow(label = "하루 목표", value = dailyTargetKcal.asKcal())
     }
 }
 
@@ -814,47 +881,38 @@ private fun StepCard(
     description: String,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Card(
-        shape = MiniCutCardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+    MiniCutGlassCard(accent = MaterialTheme.colorScheme.outline) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.Top,
+            Box(
+                modifier = Modifier.padding(top = 2.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    modifier = Modifier.padding(top = 2.dp),
-                    contentAlignment = Alignment.Center,
+                Surface(
+                    shape = MiniCutPillShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
-                    Surface(
-                        shape = MiniCutPillShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                    ) {
-                        Text(
-                            text = step,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = step,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
-            content()
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
+        content()
     }
 }
 

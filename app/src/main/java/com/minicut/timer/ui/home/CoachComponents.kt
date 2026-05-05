@@ -511,8 +511,7 @@ internal fun BodyCompositionCheckCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 CoachStatusPill(
@@ -738,15 +737,17 @@ private fun CoachStatusPill(
     value: String,
     supporting: String,
     tint: Color,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
+        modifier = modifier.fillMaxWidth(),
         shape = MiniCutPanelShape,
         color = tint.copy(alpha = 0.10f),
         border = BorderStroke(1.dp, tint.copy(alpha = 0.20f)),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             Text(
                 label,
@@ -754,13 +755,16 @@ private fun CoachStatusPill(
                 color = tint,
                 fontWeight = FontWeight.SemiBold,
             )
-            Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(
+                value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
             Text(
                 supporting,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }

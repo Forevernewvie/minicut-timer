@@ -43,7 +43,7 @@ class AppSmokeTest {
             .commit()
 
         ActivityScenario.launch(MainActivity::class.java).use {
-            composeTestRule.onNodeWithText("미니컷 대시보드").assertIsDisplayed()
+            composeTestRule.onNodeWithText("오늘 스프린트 컨트롤").assertIsDisplayed()
         }
     }
 

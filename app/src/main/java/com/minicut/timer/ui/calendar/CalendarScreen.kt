@@ -69,6 +69,7 @@ import com.minicut.timer.domain.model.CalendarRhythmStatus
 import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.ui.components.MiniCutBackdrop
 import com.minicut.timer.ui.components.MiniCutEmptyState
+import com.minicut.timer.ui.components.MiniCutGlassCard
 import com.minicut.timer.ui.components.MiniCutInlineFeedback
 import com.minicut.timer.ui.components.MiniCutInlineFeedbackTone
 import com.minicut.timer.ui.components.MiniCutMetricTile
@@ -76,6 +77,7 @@ import com.minicut.timer.ui.components.MiniCutPanelShape
 import com.minicut.timer.ui.components.MiniCutPillShape
 import com.minicut.timer.ui.components.MiniCutScreenHorizontalPadding
 import com.minicut.timer.ui.components.MiniCutSectionHeader
+import com.minicut.timer.ui.components.MiniCutSignalPill
 import com.minicut.timer.ui.util.asCompactDate
 import com.minicut.timer.ui.util.asCompactKcal
 import com.minicut.timer.ui.util.asDisplayDate
@@ -144,9 +146,9 @@ fun CalendarScreen() {
             ) {
                 item {
                     MiniCutSectionHeader(
-                        kicker = uiState.currentDate.asDisplayDate(),
-                        title = "캘린더 로그",
-                        subtitle = "기록한 날을 빠르게 훑고, 날짜를 눌러 하루 식사 로그를 바로 정리하세요.",
+                        kicker = "${uiState.currentDate.asDisplayDate()} · RHYTHM",
+                        title = "미니컷 리듬 맵",
+                        subtitle = "성공/초과/체크인 신호를 달력에서 즉시 읽고 다음 행동만 조정하세요.",
                     )
                 }
                 inlineFeedbackMessage?.let { message ->
@@ -273,16 +275,8 @@ private fun MonthOverviewRow(
 
 @Composable
 private fun CalendarRhythmCard(summary: CalendarRhythmSummary) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MiniCutPanelShape,
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+    MiniCutGlassCard(accent = MaterialTheme.colorScheme.secondary) {
+            MiniCutSignalPill("MONTHLY SIGNAL", accent = MaterialTheme.colorScheme.secondary)
             Text("월간 리듬", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MiniCutMetricTile(
@@ -309,7 +303,6 @@ private fun CalendarRhythmCard(summary: CalendarRhythmSummary) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
     }
 }
 
@@ -329,16 +322,7 @@ private fun CalendarBoard(
     onJumpToCurrentMonth: () -> Unit,
     onSelectDay: (CalendarDay) -> Unit,
 ) {
-    Surface(
-        shape = MiniCutPanelShape,
-        tonalElevation = 1.dp,
-        shadowElevation = 0.dp,
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
+    MiniCutGlassCard(accent = MaterialTheme.colorScheme.primary) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -391,7 +375,6 @@ private fun CalendarBoard(
                     )
                 },
             )
-        }
     }
 }
 
@@ -470,8 +453,8 @@ private fun CalendarEntriesBottomSheet(
                     )
                 }
             }
-        }
     }
+}
 }
 
 @Composable
@@ -664,13 +647,23 @@ private fun CalendarDayCell(
                             softWrap = false,
                             overflow = TextOverflow.Clip,
                         )
-                        if (isToday) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary),
-                            )
+                        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            if (hasCheckIn) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.secondary),
+                                )
+                            }
+                            if (isToday) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary),
+                                )
+                            }
                         }
                     }
                     if (hasLog && summaryCalories != null) {
