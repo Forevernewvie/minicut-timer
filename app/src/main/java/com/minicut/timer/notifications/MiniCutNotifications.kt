@@ -1,7 +1,9 @@
 package com.minicut.timer.notifications
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.AlarmManager
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -144,23 +146,12 @@ private suspend fun deliverReminder(
     context: Context,
     intent: Intent,
 ) {
-    val slotName = intent.getStringExtra(EXTRA_SLOT) ?: return
-    val slot = ReminderSlot.entries.firstOrNull { it.name == slotName } ?: return
+    val slot = intent.reminderSlot() ?: return
     val settings = NotificationPreferences.load(context)
     val slotSetting = settings.settingFor(slot)
     val now = ZonedDateTime.now()
 
-    if (!slotSetting.enabled ||
-        (settings.cadence == ReminderCadence.Weekdays && now.dayOfWeek.isWeekend())
-    ) {
-        syncMiniCutNotifications(context, settings)
-        return
-    }
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
-        android.content.pm.PackageManager.PERMISSION_GRANTED
-    ) {
+    if (shouldSkipReminder(slotSetting, settings, now) || !canPostReminderNotification(context)) {
         syncMiniCutNotifications(context, settings)
         return
     }
@@ -192,9 +183,36 @@ private suspend fun deliverReminder(
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
 
-    NotificationManagerCompat.from(context).notify(slot.requestCode, notification)
+    postReminderNotification(context, slot, notification)
     syncMiniCutNotifications(context, settings)
 }
+
+@SuppressLint("MissingPermission")
+private fun postReminderNotification(
+    context: Context,
+    slot: ReminderSlot,
+    notification: Notification,
+) {
+    NotificationManagerCompat.from(context).notify(slot.requestCode, notification)
+}
+
+private fun Intent.reminderSlot(): ReminderSlot? {
+    val slotName = getStringExtra(EXTRA_SLOT) ?: return null
+    return ReminderSlot.entries.firstOrNull { it.name == slotName }
+}
+
+private fun shouldSkipReminder(
+    slotSetting: ReminderSetting,
+    settings: NotificationSettings,
+    now: ZonedDateTime,
+): Boolean =
+    !slotSetting.enabled ||
+        (settings.cadence == ReminderCadence.Weekdays && now.dayOfWeek.isWeekend())
+
+private fun canPostReminderNotification(context: Context): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED
 
 internal suspend fun reminderMessageFor(
     context: Context,

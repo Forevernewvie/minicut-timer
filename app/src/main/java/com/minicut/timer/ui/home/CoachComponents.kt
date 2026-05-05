@@ -3,8 +3,6 @@ package com.minicut.timer.ui.home
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,7 +10,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -22,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,6 +51,7 @@ import com.minicut.timer.notifications.ReminderCadence
 import com.minicut.timer.notifications.ReminderSetting
 import com.minicut.timer.notifications.ReminderSlot
 import com.minicut.timer.ui.components.MiniCutCardShape
+import com.minicut.timer.ui.components.MiniCutChoiceChips
 import com.minicut.timer.ui.components.MiniCutPanelShape
 import com.minicut.timer.ui.components.MiniCutPillShape
 import com.minicut.timer.ui.util.asKcal
@@ -172,11 +171,13 @@ internal fun NotificationSettingsCard(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            CoachChoiceChips(
+            MiniCutChoiceChips(
                 options = ReminderCadence.entries,
                 isSelected = { settings.cadence == it },
                 onClick = onCadenceChange,
                 label = ReminderCadence::displayName,
+                horizontalSpacing = 8.dp,
+                verticalSpacing = 8.dp,
             )
             ReminderSlot.entries.forEach { slot ->
                 ReminderSettingRow(
@@ -186,28 +187,6 @@ internal fun NotificationSettingsCard(
                     onEditTime = { onEditTime(slot) },
                 )
             }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun <T> CoachChoiceChips(
-    options: Iterable<T>,
-    isSelected: (T) -> Boolean,
-    onClick: (T) -> Unit,
-    label: (T) -> String,
-) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        options.forEach { option ->
-            FilterChip(
-                selected = isSelected(option),
-                onClick = { onClick(option) },
-                label = { Text(label(option)) },
-            )
         }
     }
 }
@@ -346,12 +325,15 @@ internal fun LeanMassProtectionCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (dietBreakRecommendation.shouldSuggest) {
+                        val suggestedDays = dietBreakRecommendation.suggestedDays
                         val wizardSteps =
-                            listOf(
-                                "오늘은 추가 감량보다 유지 칼로리 접근을 우선 검토합니다.",
-                                "${dietBreakRecommendation.suggestedDays}일 동안 수면·피로·허기·훈련 신호를 매일 짧게 체크합니다.",
-                                "회복 신호가 안정되면 플랜에서 하루 목표를 다시 점검하고 감량 리듬으로 복귀합니다.",
-                            )
+                            remember(suggestedDays) {
+                                listOf(
+                                    "오늘은 추가 감량보다 유지 칼로리 접근을 우선 검토합니다.",
+                                    "${suggestedDays}일 동안 수면·피로·허기·훈련 신호를 매일 짧게 체크합니다.",
+                                    "회복 신호가 안정되면 플랜에서 하루 목표를 다시 점검하고 감량 리듬으로 복귀합니다.",
+                                )
+                            }
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
                                 "다이어트 브레이크 미니 가이드",
@@ -441,7 +423,6 @@ internal fun LeanMassProtectionCard(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun BodyCompositionCheckCard(
     todayCheck: DailyConditionCheck?,
@@ -624,22 +605,26 @@ internal fun BodyCompositionCheckCard(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            CoachChoiceChips(
+            MiniCutChoiceChips(
                 options = RelapsePreventionCatalog.triggerOptions,
                 isSelected = { relapseTrigger == it },
                 onClick = { relapseTrigger = relapseTrigger.toggledSelection(it) },
                 label = { it },
+                horizontalSpacing = 8.dp,
+                verticalSpacing = 8.dp,
             )
             Text(
                 "대응 루틴",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            CoachChoiceChips(
+            MiniCutChoiceChips(
                 options = RelapsePreventionCatalog.copingActionOptions,
                 isSelected = { copingAction == it },
                 onClick = { copingAction = copingAction.toggledSelection(it) },
                 label = { it },
+                horizontalSpacing = 8.dp,
+                verticalSpacing = 8.dp,
             )
             CoachSectionLabel(
                 title = "선택 컨디션",

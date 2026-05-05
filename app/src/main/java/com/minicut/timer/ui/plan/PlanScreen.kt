@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,7 +26,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -50,9 +46,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -69,6 +62,8 @@ import com.minicut.timer.domain.model.TargetGuidanceTone
 import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.ui.components.MiniCutBackdrop
 import com.minicut.timer.ui.components.MiniCutBottomActionBar
+import com.minicut.timer.ui.components.MiniCutChipRow
+import com.minicut.timer.ui.components.MiniCutChoiceChips
 import com.minicut.timer.ui.components.MiniCutCardShape
 import com.minicut.timer.ui.components.MiniCutGlassCard
 import com.minicut.timer.ui.components.MiniCutInlineFeedback
@@ -89,7 +84,7 @@ import com.minicut.timer.ui.util.asKcal
 import com.minicut.timer.ui.util.miniCutRepository
 import java.time.LocalDate
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlanScreen(
     onSaved: () -> Unit,
@@ -387,7 +382,7 @@ fun PlanScreen(
                         title = "집중 기간 선택",
                         description = "2~6주 안에서 짧게 끝내는 미니컷 원칙을 유지하세요.",
                     ) {
-                        SelectionChips(
+                        MiniCutChoiceChips(
                             options = MiniCutRules.MIN_WEEKS..MiniCutRules.MAX_WEEKS,
                             selectedValue = durationWeeks,
                             onSelect = { durationWeeks = it },
@@ -401,7 +396,7 @@ fun PlanScreen(
                         title = "하루 목표 칼로리",
                         description = "오늘 남음/초과 계산에 사용할 기준을 고르세요.",
                     ) {
-                        SelectionChips(
+                        MiniCutChoiceChips(
                             options = MiniCutRules.TARGET_OPTIONS_KCAL,
                             selectedValue = dailyTargetKcal,
                             onSelect = { dailyTargetKcal = it },
@@ -415,7 +410,7 @@ fun PlanScreen(
                         title = "플랜 목적 선택",
                         description = "목표에 따라 실행 강도와 종료 후 전략이 달라집니다.",
                     ) {
-                        SelectionChips(
+                        MiniCutChoiceChips(
                             options = MiniCutGoalMode.entries,
                             selectedValue = goalMode,
                             onSelect = { goalMode = it },
@@ -459,7 +454,7 @@ fun PlanScreen(
                         title = "결핍 강도 가드레일",
                         description = "체중과 활동 수준으로 유지칼로리를 추정해 현재 목표의 안전 범위를 점검합니다.",
                     ) {
-                        SelectionChips(
+                        MiniCutChoiceChips(
                             options = ActivityLevel.entries,
                             selectedValue = activityLevel,
                             onSelect = { activityLevel = it },
@@ -604,7 +599,7 @@ private fun PlanHeroCard() {
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SelectionChips {
+            MiniCutChipRow {
                 HeroBadge("2~6주 집중")
                 HeroBadge("하루 목표 설정")
                 HeroBadge("남음/초과 즉시 확인")
@@ -701,7 +696,7 @@ private fun PlanFocusCard(
                 modifier = Modifier.size(108.dp),
             )
         }
-        SelectionChips {
+        MiniCutChipRow {
             HeroBadge("기간 고정")
             HeroBadge("하루 기준")
             HeroBadge("결핍 잠금")
@@ -914,45 +909,6 @@ private fun StepCard(
         }
         content()
     }
-}
-
-@Composable
-private fun <T> SelectionChips(
-    options: Iterable<T>,
-    selectedValue: T,
-    onSelect: (T) -> Unit,
-    label: (T) -> String,
-) {
-    SelectionChips {
-        options.forEach { option ->
-            val optionLabel = label(option)
-            val isSelected = selectedValue == option
-            FilterChip(
-                selected = isSelected,
-                onClick = { onSelect(option) },
-                modifier = Modifier.semantics {
-                    selected = isSelected
-                    contentDescription = "$optionLabel ${selectionStateLabel(isSelected)}"
-                },
-                label = { Text(optionLabel) },
-            )
-        }
-    }
-}
-
-private fun selectionStateLabel(isSelected: Boolean): String =
-    if (isSelected) "선택됨" else "선택 안 됨"
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SelectionChips(
-    content: @Composable FlowRowScope.() -> Unit,
-) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        content = content,
-    )
 }
 
 @Composable
