@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -16,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -31,6 +35,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -147,6 +154,77 @@ fun MiniCutSignalPill(
         )
     }
 }
+
+@Composable
+fun <T> MiniCutChoiceChips(
+    options: Iterable<T>,
+    selectedValue: T,
+    onSelect: (T) -> Unit,
+    label: (T) -> String,
+    modifier: Modifier = Modifier,
+    horizontalSpacing: Dp = 10.dp,
+    verticalSpacing: Dp = 10.dp,
+) {
+    MiniCutChoiceChips(
+        options = options,
+        isSelected = { it == selectedValue },
+        onClick = onSelect,
+        label = label,
+        modifier = modifier,
+        horizontalSpacing = horizontalSpacing,
+        verticalSpacing = verticalSpacing,
+    )
+}
+
+@Composable
+fun <T> MiniCutChoiceChips(
+    options: Iterable<T>,
+    isSelected: (T) -> Boolean,
+    onClick: (T) -> Unit,
+    label: (T) -> String,
+    modifier: Modifier = Modifier,
+    horizontalSpacing: Dp = 10.dp,
+    verticalSpacing: Dp = 10.dp,
+) {
+    MiniCutChipRow(
+        modifier = modifier,
+        horizontalSpacing = horizontalSpacing,
+        verticalSpacing = verticalSpacing,
+    ) {
+        options.forEach { option ->
+            val optionLabel = label(option)
+            val selected = isSelected(option)
+            FilterChip(
+                selected = selected,
+                onClick = { onClick(option) },
+                modifier = Modifier.semantics {
+                    this.selected = selected
+                    contentDescription = "$optionLabel ${selected.selectionStateLabel()}"
+                },
+                label = { Text(optionLabel) },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun MiniCutChipRow(
+    modifier: Modifier = Modifier,
+    horizontalSpacing: Dp = 10.dp,
+    verticalSpacing: Dp = 10.dp,
+    content: @Composable FlowRowScope.() -> Unit,
+) {
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
+        verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+        content = content,
+    )
+}
+
+private fun Boolean.selectionStateLabel(): String =
+    if (this) "선택됨" else "선택 안 됨"
 
 @Composable
 fun MiniCutProgressDial(

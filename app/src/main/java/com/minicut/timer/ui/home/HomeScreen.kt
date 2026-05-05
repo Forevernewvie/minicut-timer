@@ -110,6 +110,13 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
+private val maintenanceModeChecklist =
+    listOf(
+        "종료 후 첫 3~4일은 식사 리듬·수면을 먼저 안정화하세요.",
+        "주 3회는 체중·컨디션을 짧게 체크해 급반등 신호를 빠르게 잡으세요.",
+        "기록량을 줄여도 괜찮지만 하루 1회 기록은 유지해 요요 패턴을 방지하세요.",
+    )
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -408,7 +415,7 @@ private fun DailySummaryCard(
             remainingCalories == 0 -> "목표를 정확히 맞췄어요"
             else -> "${remainingCalories.asKcal()} 남았어요"
         }
-    val mainCalories = if (todayTotal == 0) "0 kcal" else todayTotal.asKcal()
+    val mainCalories = todayTotal.asKcal()
     val statusLabel = status.asLabel()
 
     val budgetProgress = if (target <= 0) 0f else todayTotal.toFloat() / target.toFloat()
@@ -748,13 +755,6 @@ private fun MaintenanceModeCard(
     onOpenPlan: () -> Unit,
 ) {
     val reverseDietPlan = MiniCutRules.reverseDietPlan(dailyTargetKcal = dailyTargetKcal, goalMode = goalMode)
-    val checklist =
-        listOf(
-            "종료 후 첫 3~4일은 식사 리듬·수면을 먼저 안정화하세요.",
-            "주 3회는 체중·컨디션을 짧게 체크해 급반등 신호를 빠르게 잡으세요.",
-            "기록량을 줄여도 괜찮지만 하루 1회 기록은 유지해 요요 패턴을 방지하세요.",
-        )
-
     Card(
         shape = MiniCutCardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)),
@@ -794,7 +794,7 @@ private fun MaintenanceModeCard(
                     )
                 }
             }
-            checklist.forEachIndexed { index, label ->
+            maintenanceModeChecklist.forEachIndexed { index, label ->
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MiniCutPanelShape,
@@ -855,7 +855,7 @@ private fun WeeklyReportCard(
                 MiniCutMetricTile(
                     modifier = Modifier.weight(1f),
                     label = "평균",
-                    value = if (report.averageLoggedCalories == 0) "0 kcal" else report.averageLoggedCalories.asKcal(),
+                    value = report.averageLoggedCalories.asKcal(),
                     tint = MaterialTheme.colorScheme.tertiary,
                 )
             }

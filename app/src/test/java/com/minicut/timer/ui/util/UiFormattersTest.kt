@@ -10,6 +10,7 @@ class UiFormattersTest {
 
     @Test
     fun calorieFormatting_andLabels_matchUserFacingCopy() {
+        assertEquals("0 kcal", 0.asKcal())
         assertEquals("999 kcal", 999.asKcal())
         assertEquals("999", 999.asCompactKcal())
         assertEquals("1.5k", 1_500.asCompactKcal())

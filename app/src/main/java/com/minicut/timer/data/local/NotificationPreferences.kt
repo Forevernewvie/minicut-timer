@@ -68,10 +68,9 @@ internal fun sanitizeReminderTime(
     hourOfDay: Int,
     minute: Int,
     defaultTime: ReminderTime,
-): ReminderTime =
-    runCatching {
-        ReminderTime(
-            hourOfDay = hourOfDay,
-            minute = minute,
-        )
-    }.getOrDefault(defaultTime)
+): ReminderTime {
+    if (hourOfDay !in 0..23 || minute !in 0..59) {
+        return defaultTime
+    }
+    return ReminderTime(hourOfDay = hourOfDay, minute = minute)
+}
