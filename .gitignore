@@ -2,6 +2,9 @@
 .gradle/
 .gradle-home/
 /local.properties
+/key.properties
+*.jks
+*.keystore
 /.idea/
 /build/
 /captures/
