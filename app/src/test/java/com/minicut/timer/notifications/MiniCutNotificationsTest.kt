@@ -1,9 +1,9 @@
 package com.minicut.timer.notifications
 
-import org.junit.Assert.assertEquals
-import org.junit.Test
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import org.junit.Assert.assertEquals
+import org.junit.Test
 
 class MiniCutNotificationsTest {
 
@@ -65,5 +65,14 @@ class MiniCutNotificationsTest {
             ZonedDateTime.of(2026, 4, 13, 10, 0, 0, 0, ZoneId.of("Asia/Seoul")).toInstant().toEpochMilli(),
             trigger,
         )
+    }
+
+    @Test
+    fun fallbackReminderMessage_usesExistingSlotRotationWhenRepositoryUnavailable() {
+        val now = ZonedDateTime.of(2026, 4, 10, 7, 30, 0, 0, ZoneId.of("Asia/Seoul"))
+
+        val message = fallbackReminderMessage(ReminderSlot.Morning, now)
+
+        assertEquals(ReminderSlot.Morning.messages[now.dayOfMonth % ReminderSlot.Morning.messages.size], message)
     }
 }

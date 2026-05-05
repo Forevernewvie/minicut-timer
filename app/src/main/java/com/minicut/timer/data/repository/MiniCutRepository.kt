@@ -1,24 +1,31 @@
 package com.minicut.timer.data.repository
 
 import com.minicut.timer.data.local.dao.CalorieEntryDao
+import com.minicut.timer.data.local.dao.DailyConditionCheckDao
 import com.minicut.timer.data.local.dao.MiniCutPlanDao
 import com.minicut.timer.data.local.entity.CalorieEntryEntity
+import com.minicut.timer.data.local.entity.DailyConditionCheckEntity
 import com.minicut.timer.data.local.entity.toDomain
 import com.minicut.timer.data.local.entity.toEntity
 import com.minicut.timer.data.local.query.toDomain
+import com.minicut.timer.domain.model.ActivityLevel
 import com.minicut.timer.domain.model.CalorieEntry
 import com.minicut.timer.domain.model.DailyCalorieSummary
+import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.EntryQuickPreset
+import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPlan
 import com.minicut.timer.domain.rules.MiniCutRules
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 class MiniCutRepository(
     private val planDao: MiniCutPlanDao,
     private val calorieEntryDao: CalorieEntryDao,
+    private val dailyConditionCheckDao: DailyConditionCheckDao,
 ) {
     fun observePlan(): Flow<MiniCutPlan?> =
         planDao.observePlan().map { it?.toDomain() }
@@ -54,10 +61,27 @@ class MiniCutRepository(
             rows.map { it.toDomain() }
         }
 
+    fun observeDailyConditionCheck(date: LocalDate): Flow<DailyConditionCheck?> =
+        dailyConditionCheckDao.observeForDate(date.toEpochDay()).map { it?.toDomain() }
+
+    fun observeDailyConditionChecks(
+        startDate: LocalDate,
+        endDate: LocalDate,
+    ): Flow<List<DailyConditionCheck>> =
+        dailyConditionCheckDao.observeInRange(
+            startEpochDay = startDate.toEpochDay(),
+            endEpochDay = endDate.toEpochDay(),
+        ).map { rows ->
+            rows.map { it.toDomain() }
+        }
+
     suspend fun savePlan(
         startDate: LocalDate,
         durationWeeks: Int,
         dailyTargetKcal: Int,
+        goalMode: MiniCutGoalMode = MiniCutGoalMode.MassReset,
+        activityLevel: ActivityLevel = ActivityLevel.Moderate,
+        estimatedMaintenanceKcal: Int = 0,
     ) {
         val endDate = MiniCutRules.calculateEndDate(startDate, durationWeeks)
         require(MiniCutRules.isValidTarget(dailyTargetKcal)) {
@@ -69,6 +93,9 @@ class MiniCutRepository(
                 durationWeeks = durationWeeks,
                 endDate = endDate,
                 dailyTargetKcal = dailyTargetKcal,
+                goalMode = goalMode,
+                activityLevel = activityLevel,
+                estimatedMaintenanceKcal = estimatedMaintenanceKcal,
                 isActive = true,
             ).toEntity(),
         )
@@ -88,10 +115,7 @@ class MiniCutRepository(
                 foodName = foodName.trim(),
                 note = note.trim(),
                 timeLabel = timeLabel.trim(),
-                createdAtEpochMillis = LocalDateTime.now()
-                    .atZone(java.time.ZoneId.systemDefault())
-                    .toInstant()
-                    .toEpochMilli(),
+                createdAtEpochMillis = currentEpochMillis(),
             ),
         )
     }
@@ -139,8 +163,89 @@ class MiniCutRepository(
 
     suspend fun clearAllSavedData() {
         calorieEntryDao.deleteAll()
+        dailyConditionCheckDao.deleteAll()
         planDao.deletePlan()
     }
+
+    suspend fun upsertDailyConditionCheck(
+        date: LocalDate,
+        bodyWeightKg: Float?,
+        proteinGrams: Int?,
+        resistanceSets: Int?,
+        mainLiftKg: Float?,
+        relapseTrigger: String?,
+        copingAction: String?,
+        sleepHours: Float?,
+        fatigueScore: Int?,
+        hungerScore: Int?,
+        moodScore: Int?,
+        workoutPerformanceScore: Int?,
+    ) {
+        if (!hasAnyConditionSignal(
+                bodyWeightKg = bodyWeightKg,
+                proteinGrams = proteinGrams,
+                resistanceSets = resistanceSets,
+                mainLiftKg = mainLiftKg,
+                relapseTrigger = relapseTrigger,
+                copingAction = copingAction,
+                sleepHours = sleepHours,
+                fatigueScore = fatigueScore,
+                hungerScore = hungerScore,
+                moodScore = moodScore,
+                workoutPerformanceScore = workoutPerformanceScore,
+            )
+        ) {
+            return
+        }
+        dailyConditionCheckDao.upsert(
+            DailyConditionCheckEntity(
+                dateEpochDay = date.toEpochDay(),
+                bodyWeightKg = bodyWeightKg?.takeIf { it > 0f },
+                proteinGrams = proteinGrams?.takeIf { it > 0 },
+                resistanceSets = resistanceSets?.takeIf { it > 0 },
+                mainLiftKg = mainLiftKg?.takeIf { it > 0f },
+                relapseTrigger = relapseTrigger?.trim()?.takeIf { it.isNotEmpty() },
+                copingAction = copingAction?.trim()?.takeIf { it.isNotEmpty() },
+                sleepHours = sleepHours?.takeIf { it > 0f },
+                fatigueScore = fatigueScore?.takeIf { it in 1..5 },
+                hungerScore = hungerScore?.takeIf { it in 1..5 },
+                moodScore = moodScore?.takeIf { it in 1..5 },
+                workoutPerformanceScore = workoutPerformanceScore?.takeIf { it in 1..5 },
+                updatedAtEpochMillis = currentEpochMillis(),
+            ),
+        )
+    }
+
+    private fun currentEpochMillis(): Long =
+        LocalDateTime.now()
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+
+    private fun hasAnyConditionSignal(
+        bodyWeightKg: Float?,
+        proteinGrams: Int?,
+        resistanceSets: Int?,
+        mainLiftKg: Float?,
+        relapseTrigger: String?,
+        copingAction: String?,
+        sleepHours: Float?,
+        fatigueScore: Int?,
+        hungerScore: Int?,
+        moodScore: Int?,
+        workoutPerformanceScore: Int?,
+    ): Boolean =
+        (bodyWeightKg ?: 0f) > 0f ||
+            (proteinGrams ?: 0) > 0 ||
+            (resistanceSets ?: 0) > 0 ||
+            (mainLiftKg ?: 0f) > 0f ||
+            !relapseTrigger.isNullOrBlank() ||
+            !copingAction.isNullOrBlank() ||
+            (sleepHours ?: 0f) > 0f ||
+            (fatigueScore ?: 0) > 0 ||
+            (hungerScore ?: 0) > 0 ||
+            (moodScore ?: 0) > 0 ||
+            (workoutPerformanceScore ?: 0) > 0
 
     private fun List<CalorieEntryEntity>.toQuickPresets(limit: Int): List<EntryQuickPreset> =
         asSequence()

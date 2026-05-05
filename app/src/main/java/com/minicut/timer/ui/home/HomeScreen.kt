@@ -1,9 +1,5 @@
 package com.minicut.timer.ui.home
 
-import android.Manifest
-import android.app.TimePickerDialog
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -24,10 +20,12 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
@@ -66,7 +64,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -81,28 +78,29 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.minicut.timer.data.local.NotificationPreferences
 import com.minicut.timer.domain.model.CalorieEntry
+import com.minicut.timer.domain.model.CalorieAdjustmentDirection
 import com.minicut.timer.domain.model.CalorieRangeStatus
+import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.EntryQuickPreset
+import com.minicut.timer.domain.model.MiniCutGoalMode
 import com.minicut.timer.domain.model.MiniCutPhase
+import com.minicut.timer.domain.model.WeeklyCoachingSnapshot
+import com.minicut.timer.domain.model.TodayMission
+import com.minicut.timer.domain.model.MissionType
 import com.minicut.timer.domain.model.WeeklyAdherenceReport
 import com.minicut.timer.domain.rules.MiniCutRules
-import com.minicut.timer.notifications.NotificationSettings
-import com.minicut.timer.notifications.ReminderCadence
-import com.minicut.timer.notifications.ReminderSetting
-import com.minicut.timer.notifications.ReminderSlot
-import com.minicut.timer.notifications.ReminderTime
-import com.minicut.timer.notifications.syncMiniCutNotifications
 import com.minicut.timer.ui.components.MiniCutBackdrop
 import com.minicut.timer.ui.components.MiniCutCardShape
+import com.minicut.timer.ui.components.MiniCutGlassCard
 import com.minicut.timer.ui.components.MiniCutMetricTile
 import com.minicut.timer.ui.components.MiniCutPanelShape
 import com.minicut.timer.ui.components.MiniCutPillShape
+import com.minicut.timer.ui.components.MiniCutProgressDial
 import com.minicut.timer.ui.components.MiniCutSectionHeader
+import com.minicut.timer.ui.components.MiniCutSignalPill
 import com.minicut.timer.ui.util.asCompactDate
 import com.minicut.timer.ui.util.asDisplayDate
 import com.minicut.timer.ui.util.asKcal
@@ -112,10 +110,17 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
+private val maintenanceModeChecklist =
+    listOf(
+        "종료 후 첫 3~4일은 식사 리듬·수면을 먼저 안정화하세요.",
+        "주 3회는 체중·컨디션을 짧게 체크해 급반등 신호를 빠르게 잡으세요.",
+        "기록량을 줄여도 괜찮지만 하루 1회 기록은 유지해 요요 패턴을 방지하세요.",
+    )
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onOpenPlan: () -> Unit,
+    onOpenPlan: (Int?) -> Unit,
 ) {
     val context = LocalContext.current
     val repository = context.miniCutRepository
@@ -123,47 +128,19 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val today = uiState.currentDate
     var showEntrySheet by rememberSaveable { mutableStateOf(false) }
+    var showCoachSheet by rememberSaveable { mutableStateOf(false) }
     var editingEntry by remember { mutableStateOf<CalorieEntry?>(null) }
     var maintenanceChecks by rememberSaveable { mutableStateOf(setOf<Int>()) }
-    var notificationSettings by remember { mutableStateOf(NotificationPreferences.load(context)) }
-    val notificationPermissionGranted =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
-    val dialogButtonColor = MaterialTheme.colorScheme.primary.toArgb()
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    val weeklyReviewItemIndex =
+        4 + if (uiState.planPhase == MiniCutPhase.Completed && uiState.plan != null) 1 else 0
 
     fun showMessage(message: String) {
         snackbarScope.launch {
             snackbarHostState.showSnackbar(message)
         }
-    }
-
-    fun persistNotificationSettings(updated: NotificationSettings) {
-        notificationSettings = updated
-        NotificationPreferences.save(context, updated)
-        syncMiniCutNotifications(context, updated)
-    }
-
-    fun openReminderTimePicker(slot: ReminderSlot) {
-        val currentTime = notificationSettings.settingFor(slot).time
-        TimePickerDialog(
-            context,
-            { _, hourOfDay, minute ->
-                persistNotificationSettings(
-                    notificationSettings.updateSlot(slot) { it.copy(time = ReminderTime(hourOfDay = hourOfDay, minute = minute)) },
-                )
-            },
-            currentTime.hourOfDay,
-            currentTime.minute,
-            true,
-        ).apply {
-            setOnShowListener {
-                getButton(TimePickerDialog.BUTTON_POSITIVE)?.setTextColor(dialogButtonColor)
-                getButton(TimePickerDialog.BUTTON_NEGATIVE)?.setTextColor(dialogButtonColor)
-            }
-        }.show()
     }
 
     MiniCutBackdrop {
@@ -176,14 +153,15 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
+                state = listState,
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 116.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 item {
                     MiniCutSectionHeader(
-                        kicker = today.asDisplayDate(),
-                        title = "미니컷 대시보드",
-                        subtitle = "오늘의 섭취, 플랜 상태, 다음 행동을 한 화면에서 확인하세요.",
+                        kicker = "${today.asDisplayDate()} · MINI CUT",
+                        title = "오늘 스프린트 컨트롤",
+                        subtitle = "칼로리 예산, 미션, 회복 신호를 한 화면에서 짧게 끝내세요.",
                     )
                 }
                 item {
@@ -198,27 +176,49 @@ fun HomeScreen(
                     )
                 }
                 item {
+                    TodayMissionCard(
+                        missions = uiState.todayMissions,
+                        onMissionClick = { mission ->
+                            when (mission.type) {
+                                MissionType.FoodLog -> showEntrySheet = true
+                                MissionType.CoachCheckIn -> showCoachSheet = true
+                                MissionType.WeeklyReview ->
+                                    snackbarScope.launch {
+                                        listState.animateScrollToItem(weeklyReviewItemIndex)
+                                    }
+                            }
+                        },
+                    )
+                }
+                item {
                     val plan = uiState.plan
                     if (plan == null) {
-                        EmptyPlanHero(onOpenPlan = onOpenPlan)
+                        EmptyPlanHero(onOpenPlan = { onOpenPlan(null) })
                     } else {
                         PlanOverviewCard(
                             startDate = plan.startDate.asCompactDate(),
                             endDate = plan.endDate.asCompactDate(),
                             durationWeeks = plan.durationWeeks,
                             dailyTargetKcal = plan.dailyTargetKcal,
+                            goalMode = plan.goalMode,
                             phase = uiState.planPhase ?: MiniCutRules.phaseOf(plan.startDate, plan.endDate, today),
-                            progress = MiniCutRules.calculateProgress(plan.startDate, plan.endDate, today),
-                            remainingDays = MiniCutRules.remainingDays(plan.startDate, plan.endDate, today),
+                            progress = uiState.planProgress?.progress ?: MiniCutRules.calculateProgress(plan.startDate, plan.endDate, today),
+                            remainingDays = uiState.planProgress?.remainingDays ?: MiniCutRules.remainingDays(plan.startDate, plan.endDate, today),
+                            dDayLabel = uiState.planProgress?.dDayLabel.orEmpty(),
+                            progressHeadline = uiState.planProgress?.headline.orEmpty(),
+                            progressSupporting = uiState.planProgress?.supportingText.orEmpty(),
                             daysUntilStart = ChronoUnit.DAYS.between(today, plan.startDate).toInt(),
-                            onOpenPlan = onOpenPlan,
+                            onOpenPlan = { onOpenPlan(null) },
                         )
                     }
                 }
-                if (uiState.planPhase == MiniCutPhase.Completed) {
+                val completedPlan = uiState.plan
+                if (uiState.planPhase == MiniCutPhase.Completed && completedPlan != null) {
                     item {
                         MaintenanceModeCard(
                             checkedSteps = maintenanceChecks,
+                            dailyTargetKcal = completedPlan.dailyTargetKcal,
+                            goalMode = completedPlan.goalMode,
                             onToggleStep = { step ->
                                 maintenanceChecks =
                                     if (step in maintenanceChecks) {
@@ -227,38 +227,36 @@ fun HomeScreen(
                                         maintenanceChecks + step
                                     }
                             },
-                            onOpenPlan = onOpenPlan,
+                            onOpenPlan = { onOpenPlan(null) },
                         )
                     }
                 }
                 item {
                     WeeklyReportCard(
                         report = uiState.weeklyReport,
+                        coachingSnapshot = uiState.weeklyCoachingSnapshot,
                         targetCalories = uiState.todayTarget,
                     )
                 }
                 item {
-                    NotificationSettingsCard(
-                        settings = notificationSettings,
-                        notificationPermissionGranted = notificationPermissionGranted,
-                        onCadenceChange = { cadence ->
-                            persistNotificationSettings(notificationSettings.copy(cadence = cadence))
-                        },
-                        onToggleSlot = { slot, enabled ->
-                            persistNotificationSettings(notificationSettings.updateSlot(slot) { it.copy(enabled = enabled) })
-                        },
-                        onEditTime = ::openReminderTimePicker,
+                    CoachSummaryCard(
+                        recoveryMessage = uiState.recoveryRiskAssessment.message,
+                        strengthMessage = uiState.strengthTrend.message,
+                        dietBreakTitle = uiState.dietBreakRecommendation.title,
+                        onOpenCoachSheet = { showCoachSheet = true },
                     )
                 }
-                item {
-                    QuickLogAssistCard(
-                        favoritePresets = uiState.favoritePresets,
-                        recentPresets = uiState.recentPresets,
-                        onLogPreset = { preset ->
-                            viewModel.addEntryFromPreset(preset)
-                            showMessage("\"${preset.foodName}\" 프리셋으로 기록했어요")
-                        },
-                    )
+                if (uiState.favoritePresets.isNotEmpty() || uiState.recentPresets.isNotEmpty()) {
+                    item {
+                        QuickLogAssistCard(
+                            favoritePresets = uiState.favoritePresets,
+                            recentPresets = uiState.recentPresets,
+                            onLogPreset = { preset ->
+                                viewModel.addEntryFromPreset(preset)
+                                showMessage("\"${preset.foodName}\" 프리셋으로 기록했어요")
+                            },
+                        )
+                    }
                 }
                 item {
                     Row(
@@ -268,12 +266,12 @@ fun HomeScreen(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
-                                "오늘 먹은 음식",
+                                "오늘 기록",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
-                                "음식명 중심으로 빠르게 기록하고 수정하세요",
+                                "필요한 기록만 남기고 바로 수정하세요",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -334,6 +332,63 @@ fun HomeScreen(
             },
         )
     }
+
+    if (showCoachSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showCoachSheet = false },
+            modifier = Modifier.navigationBarsPadding(),
+        ) {
+            LazyColumn(
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                item {
+                    MiniCutSectionHeader(
+                        kicker = "COACH CHECK-IN",
+                        title = "코칭 체크인",
+                        subtitle = "체중·단백질·저항운동부터 저장하고 선택 지표는 필요할 때만 더하세요.",
+                    )
+                }
+                item {
+                    BodyCompositionCheckCard(
+                        todayCheck = uiState.todayConditionCheck,
+                        weeklyWeightTrend = uiState.weeklyWeightTrend,
+                        recoveryRiskAssessment = uiState.recoveryRiskAssessment,
+                        recommendedProteinGrams = uiState.recommendedProteinGrams,
+                        calorieAdjustmentRecommendation = uiState.calorieAdjustmentRecommendation,
+                        onOpenPlan = { suggestedTargetKcal -> onOpenPlan(suggestedTargetKcal) },
+                        onSave = { bodyWeightKg, proteinGrams, resistanceSets, mainLiftKg, relapseTrigger, copingAction, sleepHours, fatigueScore, hungerScore, moodScore, workoutPerformanceScore ->
+                            viewModel.saveDailyConditionCheck(
+                                bodyWeightKg = bodyWeightKg,
+                                proteinGrams = proteinGrams,
+                                resistanceSets = resistanceSets,
+                                mainLiftKg = mainLiftKg,
+                                relapseTrigger = relapseTrigger,
+                                copingAction = copingAction,
+                                sleepHours = sleepHours,
+                                fatigueScore = fatigueScore,
+                                hungerScore = hungerScore,
+                                moodScore = moodScore,
+                                workoutPerformanceScore = workoutPerformanceScore,
+                            )
+                            showMessage("코칭 체크인을 저장했어요")
+                            showCoachSheet = false
+                        },
+                        onInvalidInput = ::showMessage,
+                    )
+                }
+                item {
+                    LeanMassProtectionCard(
+                        score = uiState.leanMassProtectionScore,
+                        strengthTrend = uiState.strengthTrend,
+                        relapsePreventionInsight = uiState.relapsePreventionInsight,
+                        dietBreakRecommendation = uiState.dietBreakRecommendation,
+                        onOpenPlan = { onOpenPlan(null) },
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -355,71 +410,185 @@ private fun DailySummaryCard(
         }
     val detail =
         when {
-            todayTotal <= 0 -> "첫 식사부터 가볍게 기록하면 오늘 흐름이 시작됩니다."
+            todayTotal <= 0 -> "첫 기록을 남기면 남은 칼로리가 바로 계산돼요."
             overCalories > 0 -> "${overCalories.asKcal()} 초과했어요"
             remainingCalories == 0 -> "목표를 정확히 맞췄어요"
             else -> "${remainingCalories.asKcal()} 남았어요"
         }
-    val mainCalories = if (todayTotal == 0) "0 kcal" else todayTotal.asKcal()
+    val mainCalories = todayTotal.asKcal()
     val statusLabel = status.asLabel()
 
-    Card(
-        shape = MiniCutCardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Surface(
-                color = accent.copy(alpha = 0.12f),
-                contentColor = accent,
-                shape = MiniCutPillShape,
+    val budgetProgress = if (target <= 0) 0f else todayTotal.toFloat() / target.toFloat()
+    val dialPercent = if (target <= 0) 0 else (budgetProgress * 100f).roundToInt().coerceAtMost(199)
+
+    MiniCutGlassCard(accent = accent) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            MiniCutSignalPill(
+                text = "TODAY SPRINT · $statusLabel",
+                accent = accent,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = statusLabel,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(7.dp),
+                ) {
+                    Text(
+                        text = "오늘 섭취",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = mainCalories,
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = detail,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = accent,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                MiniCutProgressDial(
+                    progress = budgetProgress,
+                    value = "$dialPercent%",
+                    label = "목표 사용",
+                    accent = accent,
                 )
             }
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = mainCalories,
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MiniCutMetricTile(
+                modifier = Modifier.weight(1f),
+                label = "하루 기준",
+                value = target.asKcal(),
+                supporting = "2~6주 동안",
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            MiniCutMetricTile(
+                modifier = Modifier.weight(1f),
+                label = if (overCalories > 0) "가드레일" else "남은 예산",
+                value = (if (overCalories > 0) overCalories else remainingCalories).asKcal(),
+                supporting = if (overCalories > 0) "초과 조정" else "${entryCount}건 기록",
+                tint = accent,
+            )
+        }
+        Button(
+            onClick = onAddMeal,
+            modifier = Modifier.fillMaxWidth(),
+            shape = MiniCutPillShape,
+        ) {
+            Text(if (entryCount == 0) "첫 음식 기록하기" else "음식 빠르게 추가")
+        }
+    }
+}
+
+@Composable
+private fun TodayMissionCard(
+    missions: List<TodayMission>,
+    onMissionClick: (TodayMission) -> Unit,
+) {
+    val completedCount = missions.count { it.isComplete }
+    MiniCutGlassCard(accent = MaterialTheme.colorScheme.secondary) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                MiniCutSignalPill(
+                    text = "MISSION RAIL",
+                    accent = MaterialTheme.colorScheme.secondary,
                 )
+                Text("오늘의 3개 체크포인트", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    text = detail,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = accent,
-                )
-                Text(
-                    text = "${entryCount}건 기록됨",
+                    "미니컷에 필요한 행동만 3개로 줄여 오늘 루틴을 빠르게 마무리합니다.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MiniCutMetricTile(
-                    modifier = Modifier.weight(1f),
-                    label = "목표",
-                    value = target.asKcal(),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                MiniCutMetricTile(
-                    modifier = Modifier.weight(1f),
-                    label = if (overCalories > 0) "초과" else "남음",
-                    value = (if (overCalories > 0) overCalories else remainingCalories).asKcal(),
-                    tint = accent,
+            Surface(
+                shape = MiniCutPillShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.primary,
+            ) {
+                Text(
+                    "$completedCount/${missions.size}",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
                 )
             }
-            FilledTonalButton(
-                onClick = onAddMeal,
-                modifier = Modifier.fillMaxWidth(),
+        }
+        missions.forEachIndexed { index, mission ->
+            MissionRow(
+                index = index + 1,
+                mission = mission,
+                onClick = { onMissionClick(mission) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MissionRow(
+    index: Int,
+    mission: TodayMission,
+    onClick: () -> Unit,
+) {
+    val accent = if (mission.isComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MiniCutPanelShape,
+        color = accent.copy(alpha = if (mission.isComplete) 0.10f else 0.06f),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.18f)),
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = accent.copy(alpha = 0.16f),
+                contentColor = accent,
             ) {
-                Text("음식 기록하기")
+                Text(
+                    if (mission.isComplete) "✓" else index.toString(),
+                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(mission.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    mission.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Surface(
+                shape = MiniCutPillShape,
+                color = accent.copy(alpha = 0.12f),
+                contentColor = accent,
+            ) {
+                Text(
+                    mission.actionLabel,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
             }
         }
     }
@@ -427,27 +596,19 @@ private fun DailySummaryCard(
 
 @Composable
 private fun EmptyPlanHero(onOpenPlan: () -> Unit) {
-    Card(
-        shape = MiniCutCardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                "짧고 선명하게 끝내는 미니컷",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                "2~6주 플랜과 하루 목표 칼로리를 먼저 정하면 기록과 판단이 훨씬 쉬워져요.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OutlinedButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth()) {
-                Text("플랜 설정 시작")
-            }
+    MiniCutGlassCard(accent = MaterialTheme.colorScheme.primary) {
+        MiniCutSignalPill("SPRINT NOT READY")
+        Text(
+            "짧고 선명하게 끝내는 미니컷",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            "2~6주 종료일과 하루 칼로리 가드레일을 먼저 정하면 홈이 오늘 행동만 보여줍니다.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth(), shape = MiniCutPillShape) {
+            Text("플랜 설정 시작")
         }
     }
 }
@@ -458,9 +619,13 @@ private fun PlanOverviewCard(
     endDate: String,
     durationWeeks: Int,
     dailyTargetKcal: Int,
+    goalMode: MiniCutGoalMode,
     phase: MiniCutPhase,
     progress: Float,
     remainingDays: Int,
+    dDayLabel: String,
+    progressHeadline: String,
+    progressSupporting: String,
     daysUntilStart: Int,
     onOpenPlan: () -> Unit,
 ) {
@@ -478,18 +643,10 @@ private fun PlanOverviewCard(
         }
     val progressValue by animateFloatAsState(targetValue = progress, label = "planProgress")
 
-    Card(
-        shape = MiniCutCardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
+    MiniCutGlassCard(accent = MaterialTheme.colorScheme.primary) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Flag, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Text("미니컷 플랜", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("스프린트 계약", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             }
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
@@ -503,16 +660,46 @@ private fun PlanOverviewCard(
                     fontWeight = FontWeight.SemiBold,
                 )
             }
-            Text(
-                "$startDate ~ $endDate",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        "$startDate ~ $endDate",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (progressHeadline.isNotBlank()) {
+                        Text(
+                            progressHeadline,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                MiniCutProgressDial(
+                    progress = progressValue,
+                    value = dDayLabel.ifBlank { "D-${remainingDays}" },
+                    label = "종료 신호",
+                    accent = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.size(104.dp),
+                )
+            }
             Text(
                 "하루 목표 ${dailyTargetKcal.asKcal()}",
                 color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "플랜 목적 ${goalMode.displayName} · ${goalMode.shortDescription}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MiniCutMetricTile(
@@ -547,7 +734,7 @@ private fun PlanOverviewCard(
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Text(
-                    progressSupportingText,
+                    progressSupporting.ifBlank { progressSupportingText },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -555,133 +742,6 @@ private fun PlanOverviewCard(
             OutlinedButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth()) {
                 Text("플랜 수정")
             }
-        }
-    }
-}
-
-@Composable
-private fun NotificationSettingsCard(
-    settings: NotificationSettings,
-    notificationPermissionGranted: Boolean,
-    onCadenceChange: (ReminderCadence) -> Unit,
-    onToggleSlot: (ReminderSlot, Boolean) -> Unit,
-    onEditTime: (ReminderSlot) -> Unit,
-) {
-    Card(
-        shape = MiniCutCardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    "리마인더 설정",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    "아침/저녁 체크인과 반복 요일을 내 생활 리듬에 맞게 조정하세요.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ReminderCadence.entries.forEach { cadence ->
-                    val selected = settings.cadence == cadence
-                    if (selected) {
-                        FilledTonalButton(
-                            onClick = { onCadenceChange(cadence) },
-                            modifier = Modifier.semantics {
-                                this.selected = true
-                                contentDescription = "${cadence.displayName} 선택됨"
-                            },
-                        ) {
-                            Text(cadence.displayName)
-                        }
-                    } else {
-                        OutlinedButton(
-                            onClick = { onCadenceChange(cadence) },
-                            modifier = Modifier.semantics {
-                                this.selected = false
-                                contentDescription = "${cadence.displayName} 선택 안 됨"
-                            },
-                        ) {
-                            Text(cadence.displayName)
-                        }
-                    }
-                }
-            }
-            ReminderSettingRow(
-                slot = ReminderSlot.Morning,
-                setting = settings.morning,
-                onToggle = { onToggleSlot(ReminderSlot.Morning, it) },
-                onEditTime = { onEditTime(ReminderSlot.Morning) },
-            )
-            ReminderSettingRow(
-                slot = ReminderSlot.Evening,
-                setting = settings.evening,
-                onToggle = { onToggleSlot(ReminderSlot.Evening, it) },
-                onEditTime = { onEditTime(ReminderSlot.Evening) },
-            )
-            if (!notificationPermissionGranted && (settings.morning.enabled || settings.evening.enabled)) {
-                Text(
-                    "알림 권한이 꺼져 있으면 설정한 시간이 되어도 리마인더가 오지 않을 수 있어요.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReminderSettingRow(
-    slot: ReminderSlot,
-    setting: ReminderSetting,
-    onToggle: (Boolean) -> Unit,
-    onEditTime: () -> Unit,
-) {
-    val reminderStatusText = if (setting.enabled) "켜짐" else "꺼짐"
-    Card(
-        shape = MiniCutPanelShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics(mergeDescendants = true) {
-                    contentDescription = "${slot.displayName} 리마인더, ${setting.time.formatted()}, $reminderStatusText"
-                }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(slot.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    if (setting.enabled) "${setting.time.formatted()} · ${slot.title}" else "현재 꺼져 있어요",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = setting.enabled,
-                onCheckedChange = onToggle,
-            )
-            OutlinedButton(onClick = onEditTime) {
-                Text(setting.time.formatted())
-            }
-        }
     }
 }
 
@@ -689,16 +749,12 @@ private fun ReminderSettingRow(
 @Composable
 private fun MaintenanceModeCard(
     checkedSteps: Set<Int>,
+    dailyTargetKcal: Int,
+    goalMode: MiniCutGoalMode,
     onToggleStep: (Int) -> Unit,
     onOpenPlan: () -> Unit,
 ) {
-    val checklist =
-        listOf(
-            "유지 단계 시작: 하루 목표를 한 단계 높이거나 현재 목표를 3~4일 더 관찰해보세요.",
-            "주 3회는 체중·컨디션을 짧게 체크해서 반등 신호를 먼저 잡으세요.",
-            "이번 주는 하루 한 번만 기록해도 괜찮아요. 기록 리듬만 끊기지 않게 이어가세요.",
-        )
-
+    val reverseDietPlan = MiniCutRules.reverseDietPlan(dailyTargetKcal = dailyTargetKcal, goalMode = goalMode)
     Card(
         shape = MiniCutCardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)),
@@ -710,10 +766,35 @@ private fun MaintenanceModeCard(
         ) {
             Text("플랜 종료 후 유지 모드", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
-                "감량 종료 직후 1~2주는 유지 흐름을 만드는 구간이에요. 아래 체크로 다음 주를 준비하세요.",
+                reverseDietPlan.summary,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            checklist.forEachIndexed { index, label ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MiniCutPanelShape,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(reverseDietPlan.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    reverseDietPlan.steps.forEach { step ->
+                        Text(
+                            "• ${step.weekLabel}: ${step.targetCalories.asKcal()} · ${step.note}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        reverseDietPlan.caution,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+            maintenanceModeChecklist.forEachIndexed { index, label ->
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MiniCutPanelShape,
@@ -748,17 +829,11 @@ private fun MaintenanceModeCard(
 @Composable
 private fun WeeklyReportCard(
     report: WeeklyAdherenceReport,
+    coachingSnapshot: WeeklyCoachingSnapshot,
     targetCalories: Int,
 ) {
-    Card(
-        shape = MiniCutCardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
+    MiniCutGlassCard(accent = MaterialTheme.colorScheme.secondary) {
+            MiniCutSignalPill("RHYTHM REVIEW", accent = MaterialTheme.colorScheme.secondary)
             Text("주간 복기", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
                 "최근 7일 기준으로 기록 흐름과 목표 이내 일수를 정리했어요.",
@@ -780,7 +855,7 @@ private fun WeeklyReportCard(
                 MiniCutMetricTile(
                     modifier = Modifier.weight(1f),
                     label = "평균",
-                    value = if (report.averageLoggedCalories == 0) "0 kcal" else report.averageLoggedCalories.asKcal(),
+                    value = report.averageLoggedCalories.asKcal(),
                     tint = MaterialTheme.colorScheme.tertiary,
                 )
             }
@@ -790,7 +865,26 @@ private fun WeeklyReportCard(
                 color = MaterialTheme.colorScheme.primary,
             )
             Text(report.focusMessage, style = MaterialTheme.typography.bodyMedium)
-        }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MiniCutPanelShape,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.50f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(coachingSnapshot.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(coachingSnapshot.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    Text(coachingSnapshot.nextAction, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "${coachingSnapshot.momentumLabel} · ${coachingSnapshot.momentumMessage}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
     }
 }
 
@@ -801,18 +895,11 @@ private fun QuickLogAssistCard(
     recentPresets: List<EntryQuickPreset>,
     onLogPreset: (EntryQuickPreset) -> Unit,
 ) {
-    Card(
-        shape = MiniCutCardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+    MiniCutGlassCard(accent = MaterialTheme.colorScheme.primary) {
+            MiniCutSignalPill("FAST LOG")
             Text("빠른 기록", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
-                "최근 먹은 조합이나 즐겨찾기를 한 번 눌러 바로 오늘 기록에 추가하세요.",
+                "반복되는 식사는 한 번 눌러 바로 추가하세요.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -830,7 +917,6 @@ private fun QuickLogAssistCard(
                     PresetSection(title = "최근 기록", presets = recentPresets, onLogPreset = onLogPreset)
                 }
             }
-        }
     }
 }
 
@@ -1022,7 +1108,6 @@ private fun AddEntrySheet(
         },
         shape = MiniCutCardShape,
         containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = null,
     ) {
         Column(
             modifier = Modifier

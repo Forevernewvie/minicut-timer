@@ -5,6 +5,7 @@ import com.minicut.timer.data.local.entity.MiniCutPlanEntity
 import com.minicut.timer.data.local.query.DailyCalorieSummaryRow
 import com.minicut.timer.data.repository.MiniCutRepository
 import com.minicut.timer.testing.FakeCalorieEntryDao
+import com.minicut.timer.testing.FakeDailyConditionCheckDao
 import com.minicut.timer.testing.FakeMiniCutPlanDao
 import com.minicut.timer.testing.MainDispatcherRule
 import java.time.LocalDate
@@ -37,7 +38,7 @@ class CalendarViewModelTest {
         val calorieDao = FakeCalorieEntryDao()
         val viewModel =
             CalendarViewModel(
-                repository = MiniCutRepository(planDao, calorieDao),
+                repository = MiniCutRepository(planDao, calorieDao, FakeDailyConditionCheckDao()),
                 dateTickerFlow = flowOf(selectedDate),
             )
         val collectionJob =
@@ -135,7 +136,7 @@ class CalendarViewModelTest {
         val calorieDao = FakeCalorieEntryDao()
         val viewModel =
             CalendarViewModel(
-                repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao),
+                repository = MiniCutRepository(FakeMiniCutPlanDao(), calorieDao, FakeDailyConditionCheckDao()),
                 dateTickerFlow = flowOf(LocalDate.of(2026, 4, 10)),
             )
 

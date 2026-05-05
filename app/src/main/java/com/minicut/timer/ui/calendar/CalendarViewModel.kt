@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.minicut.timer.data.repository.MiniCutRepository
+import com.minicut.timer.domain.model.CalendarRhythmSummary
 import com.minicut.timer.domain.model.CalorieEntry
 import com.minicut.timer.domain.model.DailyCalorieSummary
+import com.minicut.timer.domain.model.DailyConditionCheck
 import com.minicut.timer.domain.model.MiniCutPlan
+import com.minicut.timer.domain.rules.MiniCutRules
 import com.minicut.timer.ui.util.currentDateTickerFlow
 import com.minicut.timer.ui.util.miniCutViewModelFactory
 import java.time.LocalDate
@@ -19,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -27,8 +31,11 @@ data class CalendarUiState(
     val month: YearMonth = YearMonth.now(),
     val plan: MiniCutPlan? = null,
     val summaries: List<DailyCalorieSummary> = emptyList(),
+    val monthlyConditionChecks: List<DailyConditionCheck> = emptyList(),
     val monthLoggedDaysCount: Int = 0,
     val monthTotalCalories: Int = 0,
+    val targetCalories: Int = MiniCutRules.DEFAULT_TARGET_KCAL,
+    val rhythmSummary: CalendarRhythmSummary = CalendarRhythmSummary(),
     val selectedDate: LocalDate? = null,
     val selectedEntries: List<CalorieEntry> = emptyList(),
     val selectedDayTotalCalories: Int = 0,
@@ -39,6 +46,7 @@ private data class CalendarMonthState(
     val month: YearMonth,
     val plan: MiniCutPlan?,
     val summaries: List<DailyCalorieSummary>,
+    val conditionChecks: List<DailyConditionCheck>,
 )
 
 private data class CalendarSelectionState(
@@ -66,10 +74,17 @@ class CalendarViewModel(
                 endDate = month.atEndOfMonth(),
             )
         }
+    private val monthlyConditionChecksFlow =
+        monthFlow.flatMapLatest { month ->
+            repository.observeDailyConditionChecks(
+                startDate = month.atDay(1),
+                endDate = month.atEndOfMonth(),
+            )
+        }
     private val selectedEntriesFlow =
         selectedDateFlow.flatMapLatest { date ->
             if (date == null) {
-                kotlinx.coroutines.flow.flowOf(emptyList())
+                flowOf(emptyList())
             } else {
                 repository.observeEntriesForDate(date)
             }
@@ -94,12 +109,14 @@ class CalendarViewModel(
                 monthFlow,
                 repository.observePlan(),
                 monthlySummariesFlow,
-            ) { currentDate, month, plan, summaries ->
+                monthlyConditionChecksFlow,
+            ) { currentDate, month, plan, summaries, conditionChecks ->
                 CalendarMonthState(
                     currentDate = currentDate,
                     month = month,
                     plan = plan,
                     summaries = summaries,
+                    conditionChecks = conditionChecks,
                 )
             },
             combine(selectedDateFlow, selectedEntriesFlow) { selectedDate, selectedEntries ->
@@ -114,8 +131,15 @@ class CalendarViewModel(
                 month = monthState.month,
                 plan = monthState.plan,
                 summaries = monthState.summaries,
+                monthlyConditionChecks = monthState.conditionChecks,
                 monthLoggedDaysCount = monthState.summaries.count { it.totalCalories > 0 },
                 monthTotalCalories = monthState.summaries.sumOf { it.totalCalories },
+                targetCalories = monthState.plan?.dailyTargetKcal ?: MiniCutRules.DEFAULT_TARGET_KCAL,
+                rhythmSummary = MiniCutRules.calendarRhythmSummary(
+                    summaries = monthState.summaries,
+                    checks = monthState.conditionChecks,
+                    targetCalories = monthState.plan?.dailyTargetKcal ?: MiniCutRules.DEFAULT_TARGET_KCAL,
+                ),
                 selectedDate = selectionState.selectedDate,
                 selectedEntries = selectionState.selectedEntries,
                 selectedDayTotalCalories = selectionState.selectedEntries.sumOf { it.calories },
