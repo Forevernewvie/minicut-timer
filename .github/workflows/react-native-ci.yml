@@ -1,0 +1,44 @@
+name: React Native CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'release/**'
+      - 'hotfix/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+
+concurrency:
+  group: rn-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run TypeScript typecheck
+        run: npx tsc --noEmit
+
+      - name: Compile and run domain rules unit tests
+        run: |
+          npx tsc src/domain/rules.test.ts --target es2022 --module commonjs --moduleResolution node --esModuleInterop --ignoreConfig --ignoreDeprecations 6.0
+          node src/domain/rules.test.js
